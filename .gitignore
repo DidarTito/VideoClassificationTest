@@ -1,0 +1,203 @@
+# # Python environments and caches
+# venv/
+# .venv/
+# env/
+# __pycache__/
+# *.py[cod]
+# *.pyo
+# *.egg-info/
+# .pytest_cache/
+# .mypy_cache/
+# .ruff_cache/
+# .coverage
+# htmlcov/
+# build/
+# dist/
+
+# # Local credentials and machine-specific configuration
+# .env
+# .env.*
+# !.env.example
+# *.pem
+# *.key
+# *.p12
+# *.pfx
+
+# # Datasets, decoded videos, and generated clip caches
+# datasets/**
+# !datasets/README.md
+# *.mp4
+# *.avi
+# *.mov
+# *.mkv
+# *.webm
+# *.part
+# .clip_cache*
+
+# # Model weights. Commit only the inventory and documentation.
+# checkpoints/**
+# !checkpoints/README.md
+# !checkpoints/manifest.csv
+# *.pt
+# *.pth
+# *.pyth
+# *.pkl
+# *.torch
+# *.safetensors
+# *.ckpt
+
+# # Raw/in-progress benchmark outputs. Curate final tables under results/.
+# benchmark_results.csv
+# outputs/
+# results_*/
+# results-stage*/
+
+# # Tool, editor, and operating-system state
+# .agents/
+# .vscode/
+# .idea/
+# Microsoft/
+# Thumbs.db
+# Desktop.ini
+# .DS_Store
+
+# ============================================================
+# Python environments and caches
+# ============================================================
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# ============================================================
+# Local credentials and machine-specific configuration
+# ============================================================
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ============================================================
+# Datasets
+#
+# Keep:
+# - Python dataset loaders
+# - README files
+# - annotations
+# - JSON/CSV class mappings
+#
+# Ignore:
+# - videos
+# - extracted frames
+# - generated tensors
+# - archives
+# ============================================================
+datasets/**/*.mp4
+datasets/**/*.avi
+datasets/**/*.mov
+datasets/**/*.mkv
+datasets/**/*.webm
+datasets/**/*.mpeg
+datasets/**/*.mpg
+
+datasets/**/*.jpg
+datasets/**/*.jpeg
+datasets/**/*.png
+datasets/**/*.bmp
+
+datasets/**/*.npy
+datasets/**/*.npz
+
+datasets/**/*.zip
+datasets/**/*.7z
+datasets/**/*.rar
+datasets/**/*.tar
+datasets/**/*.tar.gz
+datasets/**/*.tgz
+
+datasets/**/videos/
+datasets/**/frames/
+datasets/**/raw/
+datasets/**/clips/
+datasets/**/cache/
+datasets/**/.cache/
+
+*.part
+.clip_cache*
+clip_cache/
+
+# Add exact large dataset directories here
+datasets/kinetics400/
+datasets/Kinetics-400/
+datasets/k400/
+datasets/ssv2/
+datasets/something-something-v2/
+
+# ============================================================
+# Model weights
+#
+# Keep checkpoints/README.md and checkpoints/manifest.csv.
+# Actual weights should be downloaded separately.
+# ============================================================
+checkpoints/**
+!checkpoints/README.md
+!checkpoints/manifest.csv
+
+*.pth
+*.pyth
+*.safetensors
+*.ckpt
+*.torch
+
+# .pt and .pkl may also contain small required metadata.
+# Ignore them only inside checkpoint/data directories rather
+# than everywhere in the project.
+checkpoints/**/*.pt
+checkpoints/**/*.pkl
+datasets/**/*.pt
+datasets/**/*.pkl
+
+# ============================================================
+# Raw and temporary benchmark outputs
+#
+# Keep curated final CSV/JSON tables under results/.
+# ============================================================
+benchmark_results.csv
+outputs/
+results_*/
+results-stage*/
+runs/
+wandb/
+tensorboard/
+lightning_logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# ============================================================
+# Tool, editor, and operating-system state
+# ============================================================
+.agents/
+.vscode/
+.idea/
+Microsoft/
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,16 @@
+candidate_order,model_key,model,k400_runnable,ssv2_pair_supported,ssv2_availability_code,ssv2_availability_reason
+1,uniformer-b,UniFormer-B,true,true,official_pair_supported,Official UniFormer-B 174-class SSV2 checkpoint and configuration are released and the exact repository adapter is registered.
+2,uniformer-s,UniFormer-S,true,true,official_pair_supported,Official UniFormer-S 174-class SSV2 checkpoint and configuration are released and the exact repository adapter is registered.
+3,mvit-b-24-32x3,"MViT-B-24, 32x3",true,false,no_exact_variant_pair,No exact supervised SSV2 checkpoint matching the selected MViT-B-24 32x3 v1 configuration is registered; MViTv2 is a different model and is not substituted.
+4,mvit-v1-b,"MViT-B, 32x3",true,false,no_exact_variant_pair,No exact supervised SSV2 checkpoint matching the selected MViT-B 32x3 v1 configuration is registered; MViTv2 is a different model and is not substituted.
+5,videoswin-t,VideoSwin-T,true,false,no_exact_variant_pair,The integrated Video Swin SSV2 release provides the selected Base configuration but not an exact Tiny classifier pair; no proxy is substituted.
+6,videoswin-s,VideoSwin-S,true,false,no_exact_variant_pair,The integrated Video Swin SSV2 release provides the selected Base configuration but not an exact Small classifier pair; no proxy is substituted.
+7,videoswin-b,VideoSwin-B,true,true,official_pair_supported,Official VideoSwin-B 174-class SSV2 checkpoint and configuration are released and the exact repository adapter is registered.
+8,timesformer-b,TimeSformer-B,true,true,official_pair_supported,Official TimeSformer-B 174-class SSV2 checkpoint and configuration are released and the exact repository adapter is registered.
+9,video-focalnet-t,Video-FocalNet-T,true,false,no_exact_variant_pair,The integrated Video-FocalNets SSV2 release provides Base but not an exact Tiny classifier pair; no proxy is substituted.
+10,video-focalnet-s,Video-FocalNet-S,true,false,no_exact_variant_pair,The integrated Video-FocalNets SSV2 release provides Base but not an exact Small classifier pair; no proxy is substituted.
+11,video-focalnet-b,Video-FocalNet-B,true,true,official_pair_supported,Official Video-FocalNet-B 174-class SSV2 checkpoint and configuration are released and the exact repository adapter is registered.
+12,dualformer-t,DualFormer-T,true,false,no_supervised_ssv2_release,No exact released and registered 174-class SSV2 classifier is available for DualFormer-T; its K400 head cannot be reused.
+13,omnivore-b,Omnivore-B,true,false,no_supervised_ssv2_release,No official 174-class SSV2 head is released and registered for Omnivore-B; its K400 or multitask heads are not substituted.
+14,videomae-b,VideoMAE-B,true,true,official_pair_supported,Official VideoMAE-B 174-class SSV2 checkpoint and configuration are released and the exact repository adapter is registered.
+15,vtn-b,VTN-B,true,false,no_supervised_ssv2_release,No exact released and registered 174-class SSV2 classifier is available for VTN-B; its K400 head cannot be reused.

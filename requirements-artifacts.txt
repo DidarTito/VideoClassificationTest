@@ -1,0 +1,3 @@
+# Optional: only needed for manifest rows that use google_drive_id.
+gdown==6.1.0
+
