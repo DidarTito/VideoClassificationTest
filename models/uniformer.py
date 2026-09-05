@@ -7,6 +7,7 @@ from .common import (
     AdapterMetadata,
     ModelUnavailableError,
     ROOT,
+    checkpoint_path as configured_checkpoint_path,
     isolated_vendor_package,
     load_exact_state_dict,
     normalize,
@@ -48,20 +49,20 @@ class UniFormerModel(AdapterMetadata):
 
     MODEL_ZOO = {
         "S": {
-            "config": _VENDOR_ROOT / "exp" / "uniformer_s16x8_k400" / "config.yaml",
-            "checkpoint": ROOT / "checkpoints" / "uniformer" / "uniformer_small_k400_16x8.pth",
-            "frames": 16,
-            "sampling_rate": 8,
-            "accuracy": 80.8,
-            "gflops": 167.0,
-        },
-        "B": {
-            "config": _VENDOR_ROOT / "exp" / "uniformer_b16x4_k400" / "config.yaml",
-            "checkpoint": ROOT / "checkpoints" / "uniformer" / "uniformer_base_k400_16x4.pth",
+            "config": _VENDOR_ROOT / "exp" / "uniformer_s16x4_k400" / "config.yaml",
+            "checkpoint": configured_checkpoint_path("uniformer", "uniformer_small_k400_16x4.pth"),
             "frames": 16,
             "sampling_rate": 4,
-            "accuracy": 82.0,
-            "gflops": 387.0,
+            "accuracy": 80.8,
+            "gflops": 41.8,
+        },
+        "B": {
+            "config": _VENDOR_ROOT / "exp" / "uniformer_b32x4_k400" / "config.yaml",
+            "checkpoint": configured_checkpoint_path("uniformer", "uniformer_base_k400_32x4.pth"),
+            "frames": 32,
+            "sampling_rate": 4,
+            "accuracy": 82.9,
+            "gflops": 259.0,
         },
     }
     def __init__(self, variant="S", device="cuda", dataset="k400"):
@@ -75,7 +76,8 @@ class UniFormerModel(AdapterMetadata):
             stem = "base" if variant == "B" else "small"
             self.info.update({
                 "config": _VENDOR_ROOT / "exp" / f"uniformer_{variant.lower()}16_sthv2_prek400" / "config.yaml",
-                "checkpoint": ROOT / "checkpoints" / "uniformer" / f"uniformer_{stem}_sthv2_16_prek400.pth",
+                # LEGACY released classifier, quarantined per Phase 3.
+                "checkpoint": configured_checkpoint_path("legacy_ssv2_released", f"uniformer_{stem}_sthv2_16_prek400.pth"),
                 "frames": 16,
                 "sampling_rate": 4,
                 # Official K400-pretrained 16x3x1 SSV2 model-zoo rows.
@@ -84,7 +86,7 @@ class UniFormerModel(AdapterMetadata):
             })
 
         if self.dataset == "k400" and variant == "B" and not Path(self.info["checkpoint"]).is_file():
-            wrong = ROOT / "checkpoints" / "uniformer" / "uniformer_base_sthv2_16_prek400.pth"
+            wrong = configured_checkpoint_path("legacy_ssv2_released", "uniformer_base_sthv2_16_prek400.pth")
             detail = (
                 f" The present {wrong.name} checkpoint has a 174-class "
                 "Something-Something-v2 head and is intentionally rejected."

@@ -25,19 +25,20 @@ import torch
 import torch.nn.functional as F
 
 from .kinetics_labels import kinetics400_classes
-from .common import require_dataset
+from .common import checkpoint_path, require_dataset
 
 
 _ROOT = Path(__file__).resolve().parents[1]
 _SLOWFAST_ROOT = _ROOT / "third_party" / "SlowFast"
 _B24_CONFIG = _SLOWFAST_ROOT / "configs" / "Kinetics" / "MVIT_B_32x3_CONV.yaml"
+_B16X4_CONFIG = _SLOWFAST_ROOT / "configs" / "Kinetics" / "MVIT_B_16x4_CONV.yaml"
 
 
 class MViTSlowFastModel:
     """Runnable Kinetics-400 MViT adapter for ``run_benchmark.py``.
 
     Args:
-        variant: ``"B-32x3"`` (default) or ``"B-24-32x3"``.
+        variant: ``"B-32x3"`` (default), ``"B-16x4"``, or ``"B-24-32x3"``.
         device: Requested Torch device. CUDA requests fall back to CPU when
             CUDA is unavailable.
         checkpoint: Optional checkpoint override. Both defaults are stored in
@@ -50,20 +51,24 @@ class MViTSlowFastModel:
             "accuracy": 80.2,
             "parameters": 36_600_000,
             "gflops": 170.0,
-            "checkpoint": _ROOT
-            / "checkpoints"
-            / "mvit"
-            / "MVIT_B_32x3_f294077834.pyth",
+            "frames": 32,
+            "checkpoint": checkpoint_path("mvit", "MVIT_B_32x3_f294077834.pyth"),
+        },
+        "B-16x4": {
+            "name": "MViT-B, 16x4",
+            "accuracy": 78.4,
+            "parameters": 36_600_000,
+            "gflops": 70.5,
+            "frames": 16,
+            "checkpoint": checkpoint_path("mvit", "MVIT_B_16x4.pyth"),
         },
         "B-24-32x3": {
             "name": "MViT-B-24, 32x3",
             "accuracy": 80.4,
             "parameters": 52_900_000,
             "gflops": 236.0,
-            "checkpoint": _ROOT
-            / "checkpoints"
-            / "mvit"
-            / "MVIT_B_24_32x3.pyth",
+            "frames": 32,
+            "checkpoint": checkpoint_path("mvit", "MVIT_B_24_32x3.pyth"),
         },
     }
 
@@ -71,13 +76,14 @@ class MViTSlowFastModel:
         "B": "B-32x3",
         "B-32X3": "B-32x3",
         "B32X3": "B-32x3",
+        "B-16X4": "B-16x4",
+        "B16X4": "B-16x4",
         "B-24": "B-24-32x3",
         "B24": "B-24-32x3",
         "B-24-32X3": "B-24-32x3",
         "B24-32X3": "B-24-32x3",
     }
 
-    NUM_FRAMES = 32
     CROP_SIZE = 224
     MEAN = (0.45, 0.45, 0.45)
     STD = (0.225, 0.225, 0.225)
@@ -96,15 +102,11 @@ class MViTSlowFastModel:
         self.checkpoint_path = Path(checkpoint or self.info["checkpoint"]).expanduser()
 
         if not self.checkpoint_path.is_file():
-            if self.variant == "B-24-32x3":
-                raise FileNotFoundError(
-                    "MViT-B-24, 32x3 is unavailable: expected a compatible "
-                    f"checkpoint at '{self.checkpoint_path}'. Place the checkpoint "
-                    "there or pass checkpoint=... explicitly."
-                )
             raise FileNotFoundError(
-                f"Official MViT-B, 32x3 checkpoint not found at "
-                f"'{self.checkpoint_path}'."
+                f"Official {self.info['name']} checkpoint not found at "
+                f"'{self.checkpoint_path}'. A randomly initialized model is not "
+                "a valid benchmark target; fetch the exact official checkpoint "
+                "(see configs/frozen17.yaml checkpoint_origin)."
             )
 
         checkpoint_obj = _torch_load_checkpoint(self.checkpoint_path)
@@ -119,11 +121,28 @@ class MViTSlowFastModel:
                 )
             model = _build_pytorchvideo_mvit(depth=16)
             self._native_slowfast = False
+        elif self.variant == "B-16x4":
+            # The official 16x4 release has existed in both key layouts
+            # (pytorchvideo MVIT_B_16x4.pyth and SlowFast MVIT_B_16x4_CONV);
+            # both construct the identical MViTv1 B-Conv architecture.
+            if schema == "pytorchvideo":
+                model = _build_pytorchvideo_mvit(depth=16, temporal_size=16)
+                self._native_slowfast = False
+            elif schema == "slowfast":
+                model = _build_native_slowfast(_B16X4_CONFIG)
+                self._native_slowfast = True
+            else:
+                raise RuntimeError(
+                    "Could not identify the MViT-B 16x4 checkpoint format. "
+                    "Expected PyTorchVideo keys such as "
+                    "'patch_embed.patch_model.weight' or native SlowFast keys "
+                    "such as 'patch_embed.proj.weight'."
+                )
         elif schema == "pytorchvideo":
             model = _build_pytorchvideo_mvit(depth=24)
             self._native_slowfast = False
         elif schema == "slowfast":
-            model = _build_native_slowfast_b24()
+            model = _build_native_slowfast(_B24_CONFIG)
             self._native_slowfast = True
         else:
             raise RuntimeError(
@@ -178,7 +197,7 @@ class MViTSlowFastModel:
         indices = torch.linspace(
             0,
             clip.shape[1] - 1,
-            self.NUM_FRAMES,
+            int(self.info["frames"]),
             device=clip.device,
         ).round().to(torch.long)
         clip = clip.index_select(1, indices)
@@ -250,7 +269,7 @@ class MViT_B_24_32x3(MViTSlowFastModel):
         super().__init__("B-24-32x3", device=device, checkpoint=checkpoint)
 
 
-def _build_pytorchvideo_mvit(depth: int) -> torch.nn.Module:
+def _build_pytorchvideo_mvit(depth: int, temporal_size: int = 32) -> torch.nn.Module:
     """Mirror vendored SlowFast's PTVMViT constructor without broad imports."""
     try:
         from pytorchvideo.models.vision_transformers import (
@@ -264,7 +283,7 @@ def _build_pytorchvideo_mvit(depth: int) -> torch.nn.Module:
 
     if depth == 16:
         transitions = (1, 3, 14)
-        droppath = 0.2
+        droppath = 0.2 if temporal_size == 32 else 0.1
     elif depth == 24:
         transitions = (2, 5, 21)
         droppath = 0.3
@@ -275,7 +294,7 @@ def _build_pytorchvideo_mvit(depth: int) -> torch.nn.Module:
     strides = [[index, 1, 2, 2] for index in transitions]
     return create_multiscale_vision_transformers(
         spatial_size=224,
-        temporal_size=32,
+        temporal_size=temporal_size,
         cls_embed_on=True,
         sep_pos_embed=True,
         depth=depth,
@@ -306,11 +325,11 @@ def _build_pytorchvideo_mvit(depth: int) -> torch.nn.Module:
     )
 
 
-def _build_native_slowfast_b24() -> torch.nn.Module:
-    """Build native SlowFast MViT-B-24 with an isolated, lazy vendor import."""
-    if not _B24_CONFIG.is_file():
+def _build_native_slowfast(config_path: Path = _B24_CONFIG) -> torch.nn.Module:
+    """Build a native SlowFast MViT with an isolated, lazy vendor import."""
+    if not config_path.is_file():
         raise FileNotFoundError(
-            f"Vendored SlowFast B-24 config not found at '{_B24_CONFIG}'."
+            f"Vendored SlowFast MViT config not found at '{config_path}'."
         )
 
     vendor_root = _SLOWFAST_ROOT.resolve()
@@ -375,7 +394,7 @@ def _build_native_slowfast_b24() -> torch.nn.Module:
             "slowfast.models.video_model_builder"
         ).MViT
         cfg = get_cfg()
-        cfg.merge_from_file(str(_B24_CONFIG))
+        cfg.merge_from_file(str(config_path))
         cfg.NUM_GPUS = 0
         model = mvit_class(cfg)
     finally:

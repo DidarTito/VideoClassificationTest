@@ -81,7 +81,31 @@ class _FakePowerLogger:
         return [10.0]
 
 
+class _UnavailablePowerLogger:
+    def start(self):
+        raise RuntimeError("NVML unavailable")
+
+    def stop(self):
+        raise AssertionError("stop must not run when start did not complete")
+
+
 class PowerLoggerCleanupTests(unittest.TestCase):
+    def test_unavailable_power_backend_does_not_discard_inference(self):
+        def valid_model(_clip):
+            return torch.zeros(1, 400)
+
+        clip = torch.zeros(2, 3, 4, 4, dtype=torch.uint8)
+        with mock.patch("run_benchmark.time.sleep"):
+            with mock.patch("run_benchmark.torch.cuda.is_available", return_value=False):
+                latency, _std, power, samples, predictions = benchmark(
+                    valid_model, [clip], _UnavailablePowerLogger(), warmup=0
+                )
+
+        self.assertGreaterEqual(latency, 0.0)
+        self.assertTrue(torch.isnan(torch.tensor(power)).item())
+        self.assertEqual(samples, 0)
+        self.assertEqual(predictions, [0])
+
     def test_logger_is_stopped_when_model_output_validation_fails(self):
         logger = _FakePowerLogger()
 

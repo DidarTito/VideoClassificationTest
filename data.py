@@ -5,6 +5,7 @@ chunks.  A 1,000-clip, 32-frame benchmark is roughly 4.5 GiB even in uint8, so
 materialising the complete set in RAM is unsafe on the 16-GiB measurement
 machine.  The sharded cache also makes an interrupted decode resumable.
 """
+import csv
 import hashlib
 import json
 import random
@@ -16,6 +17,266 @@ from tqdm import tqdm
 
 VIDEO_EXTS = {".mp4", ".avi", ".mkv", ".webm", ".mov"}
 CACHE_VERSION = 4  # v4 also uses deterministic single-thread WebM decoding.
+
+
+class SampleManifestError(ValueError):
+    """A stable sample manifest is malformed or cannot be reproduced."""
+
+
+def manifest_sha256(path):
+    """Return the lowercase SHA256 digest of a manifest file."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _safe_manifest_source(source, videos_dir):
+    """Validate and normalize one dataset-root-relative manifest path."""
+    source = str(source or "").strip().replace("\\", "/")
+    if not source:
+        raise SampleManifestError("sample manifest contains an empty video path")
+    root = Path(videos_dir).resolve()
+    candidate = (root / Path(source)).resolve()
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise SampleManifestError(
+            f"sample manifest path escapes the dataset root: {source!r}"
+        ) from exc
+    if candidate.suffix.lower() not in VIDEO_EXTS:
+        raise SampleManifestError(
+            f"sample manifest path is not a supported video: {source!r}"
+        )
+    return relative.as_posix()
+
+
+def read_sample_manifest(
+    path,
+    videos_dir,
+    max_clips=None,
+    *,
+    expected_dataset=None,
+    expected_seed=None,
+    expected_frames=None,
+    expected_size=None,
+):
+    """Read an ordered CSV/JSON sample manifest as dataset-local paths.
+
+    CSV manifests use the canonical ``RelativePath`` column.  ``source`` and
+    ``Path`` are accepted so the existing sharded-cache JSON can also be
+    promoted without changing the selected clips.
+    """
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"Dataset manifest does not exist: {path}")
+    if path.suffix.lower() == ".json":
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        raw_sources = [
+            _normalise_cached_source(entry.get("source", ""), videos_dir)
+            for entry in payload.get("entries", [])
+        ]
+    else:
+        with path.open("r", encoding="utf-8-sig", newline="") as stream:
+            rows = list(csv.DictReader(stream))
+        if rows and "ClipIndex" in rows[0]:
+            for expected_index, row in enumerate(rows):
+                try:
+                    actual_index = int(row.get("ClipIndex", ""))
+                except (TypeError, ValueError) as exc:
+                    raise SampleManifestError(
+                        f"{path}:{expected_index + 2} has an invalid ClipIndex"
+                    ) from exc
+                if actual_index != expected_index:
+                    raise SampleManifestError(
+                        f"{path}:{expected_index + 2} has ClipIndex {actual_index}; "
+                        f"expected {expected_index}"
+                    )
+
+        def validate_metadata(column, expected, normalize=str):
+            if expected is None:
+                return
+            if not rows or column not in rows[0]:
+                raise SampleManifestError(
+                    f"Dataset manifest is missing required {column} metadata: {path}"
+                )
+            try:
+                actual_values = {normalize(row.get(column, "")) for row in rows}
+                expected_value = normalize(expected)
+            except (TypeError, ValueError) as exc:
+                raise SampleManifestError(
+                    f"Dataset manifest has invalid {column} metadata: {path}"
+                ) from exc
+            if actual_values != {expected_value}:
+                raise SampleManifestError(
+                    f"Dataset manifest {column} is {sorted(actual_values)!r}; "
+                    f"expected {expected_value!r}"
+                )
+
+        validate_metadata("Dataset", expected_dataset, lambda value: str(value).lower())
+        validate_metadata("Seed", expected_seed, int)
+        validate_metadata("DecodedFrames", expected_frames, int)
+        validate_metadata(
+            "Resolution",
+            None if expected_size is None else f"{int(expected_size)}x{int(expected_size)}",
+            lambda value: str(value).lower().replace(" ", ""),
+        )
+        raw_sources = []
+        for row_number, row in enumerate(rows, start=2):
+            source = (
+                row.get("RelativePath")
+                or row.get("source")
+                or row.get("Path")
+                or row.get("VideoPath")
+            )
+            if not source:
+                raise SampleManifestError(
+                    f"{path}:{row_number} has no RelativePath column value"
+                )
+            raw_sources.append(source)
+
+    sources = [_safe_manifest_source(value, videos_dir) for value in raw_sources]
+    if not sources:
+        raise SampleManifestError(f"Dataset manifest is empty: {path}")
+    if len(set(sources)) != len(sources):
+        raise SampleManifestError(f"Dataset manifest contains duplicate videos: {path}")
+    if max_clips is not None:
+        max_clips = int(max_clips)
+        if max_clips <= 0:
+            raise ValueError("max_clips must be positive")
+        if len(sources) < max_clips:
+            raise SampleManifestError(
+                f"Dataset manifest has {len(sources)} clips but {max_clips} were requested"
+            )
+        sources = sources[:max_clips]
+    return sources
+
+
+def write_sample_manifest(path, sources, videos_dir, dataset, seed, frames=32, size=224):
+    """Atomically write the exact ordered clip selection to a portable CSV."""
+    path = Path(path)
+    normalized = [_safe_manifest_source(value, videos_dir) for value in sources]
+    if not normalized:
+        raise SampleManifestError("cannot write an empty sample manifest")
+    if len(set(normalized)) != len(normalized):
+        raise SampleManifestError("cannot write a manifest with duplicate videos")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=(
+                "ClipIndex",
+                "RelativePath",
+                "Label",
+                "Dataset",
+                "Seed",
+                "DecodedFrames",
+                "Resolution",
+            ),
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for index, source in enumerate(normalized):
+            writer.writerow(
+                {
+                    "ClipIndex": index,
+                    "RelativePath": source,
+                    "Label": Path(source).parent.name,
+                    "Dataset": dataset,
+                    "Seed": int(seed),
+                    "DecodedFrames": int(frames),
+                    "Resolution": f"{int(size)}x{int(size)}",
+                }
+            )
+    temporary.replace(path)
+    return path
+
+
+def promote_cache_manifest(cache_manifest, output, videos_dir, dataset, seed=0):
+    """Promote an existing decoded-cache order into the stable CSV format."""
+    cache_manifest = Path(cache_manifest)
+    payload = json.loads(cache_manifest.read_text(encoding="utf-8"))
+    sources = [
+        _normalise_cached_source(entry.get("source", ""), videos_dir)
+        for entry in payload.get("entries", [])
+    ]
+    return write_sample_manifest(
+        output,
+        sources,
+        videos_dir,
+        dataset,
+        seed=payload.get("seed", seed),
+        frames=payload.get("frames", 32),
+        size=payload.get("size", 224),
+    )
+
+
+class LazyClipSet:
+    """A list-like clip set that decodes videos on access without caching.
+
+    Used for full-dataset runs whose decoded uint8 cache would not fit on
+    disk.  Decoding happens outside the timed/power-sampled benchmark scope
+    (clip preparation precedes each chunk's measurement), so the measurement
+    methodology is unchanged; only wall-clock time grows because every model
+    pass decodes the videos again.
+    """
+
+    def __init__(self, videos_dir, sources, frames=32, size=224):
+        self.videos_dir = Path(videos_dir)
+        self.sources = list(sources)
+        self.frames = frames
+        self.size = size
+
+    def __len__(self):
+        return len(self.sources)
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return [self[item] for item in range(*index.indices(len(self)))]
+        path = self.videos_dir / Path(self.sources[index])
+        try:
+            return load_clip(path, self.frames, self.size)
+        except Exception as exc:
+            raise RuntimeError(
+                f"streaming decode failed for manifest clip {index} ({path}); "
+                "regenerate the full-dataset manifest to drop unreadable videos"
+            ) from exc
+
+    def __iter__(self):
+        for index in range(len(self)):
+            yield self[index]
+
+    def __mul__(self, repeats):
+        repeats = int(repeats)
+        clone = LazyClipSet(self.videos_dir, self.sources * max(repeats, 0),
+                            self.frames, self.size)
+        return clone
+
+    __rmul__ = __mul__
+
+    def iter_chunks(self, chunk_size=32):
+        """Decode at most ``chunk_size`` clips into host memory at once."""
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be positive")
+        for start in range(0, len(self), chunk_size):
+            stop = min(start + chunk_size, len(self))
+            yield [self[index] for index in range(start, stop)]
+
+
+def probe_readable(path):
+    """Cheaply verify one video opens and reports a positive frame count."""
+    try:
+        reader = VideoReader(str(path), ctx=cpu(0), num_threads=1)
+        return len(reader) > 0
+    except Exception:
+        return False
+
+
+def cache_bytes_estimate(clip_count, frames=32, size=224):
+    """Disk bytes needed by the sharded uint8 cache for ``clip_count`` clips."""
+    return int(clip_count) * int(frames) * 3 * int(size) * int(size)
 
 
 class ShardedClipSet:
@@ -131,6 +392,47 @@ def _write_manifest(path, payload):
     temporary.replace(path)
 
 
+def _valid_cache_entries(cache_dir, videos_dir):
+    """Return normalized, existing entries from one sharded cache."""
+    cache_dir = Path(cache_dir)
+    manifest_path = cache_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return []
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return []
+    if payload.get("version") != CACHE_VERSION:
+        return []
+    entries = []
+    seen_sources = set()
+    for raw_entry in payload.get("entries", []):
+        if not isinstance(raw_entry, dict) or not (cache_dir / str(raw_entry.get("cache", ""))).is_file():
+            continue
+        entry = dict(raw_entry)
+        entry["source"] = _normalise_cached_source(entry.get("source", ""), videos_dir)
+        if not entry["source"] or entry["source"] in seen_sources:
+            continue
+        seen_sources.add(entry["source"])
+        entries.append(entry)
+    return entries
+
+
+def _find_compatible_cache(videos_dir, sources, frames, size, seed, fingerprint):
+    """Reuse a larger cache when it contains the requested manifest prefix."""
+    pattern = (
+        f".clip_cache_v{CACHE_VERSION}_{frames}f_{size}px_*c_"
+        f"seed{seed}_{fingerprint}"
+    )
+    for cache_dir in sorted(Path(videos_dir).glob(pattern), reverse=True):
+        entries = _valid_cache_entries(cache_dir, videos_dir)
+        by_source = {entry["source"]: entry for entry in entries}
+        if all(source in by_source for source in sources):
+            selected = [by_source[source] for source in sources]
+            return ShardedClipSet(cache_dir, selected), _source_paths(videos_dir, selected)
+    return None
+
+
 def load_clip_set(
     videos_dir,
     max_clips=1000,
@@ -139,6 +441,8 @@ def load_clip_set(
     seed=0,
     use_cache=True,
     allowed_stems=None,
+    manifest=None,
+    streaming=False,
 ):
     """Randomly samples up to max_clips videos (seeded, reproducible) from a
     directory tree and decodes them. Returns (clips, paths); corrupt videos
@@ -147,37 +451,85 @@ def load_clip_set(
 
     With caching enabled, ``clips`` is a :class:`ShardedClipSet`; callers can
     iterate normally or use ``iter_chunks`` to bound host-memory use.
+
+    ``max_clips=None`` selects every matching video (full-dataset mode).
+    ``streaming=True`` returns a :class:`LazyClipSet` that decodes on access
+    instead of building a disk cache; it requires a manifest so unreadable
+    videos were already excluded when the selection was frozen.
     """
     videos_dir = Path(videos_dir)
     allowed_stems = None if allowed_stems is None else {str(value) for value in allowed_stems}
-    paths = sorted(p for p in videos_dir.rglob("*") if p.suffix.lower() in VIDEO_EXTS)
-    if not paths:
-        raise SystemExit(f"No video files found in {videos_dir}")
-    if allowed_stems is not None:
-        paths = [path for path in paths if path.stem in allowed_stems]
-        if not paths:
-            raise SystemExit(
-                f"No videos in {videos_dir} match the selected annotation split"
+    if streaming:
+        if manifest is None:
+            raise ValueError(
+                "streaming clip loading requires a stable sample manifest so "
+                "unreadable videos are excluded deterministically"
             )
-        print(f"Annotation filter retained {len(paths)} local videos.")
-    random.Random(seed).shuffle(paths)
+        sources = read_sample_manifest(manifest, videos_dir, max_clips=max_clips)
+        if allowed_stems is not None:
+            outside_split = [
+                Path(source).stem for source in sources
+                if Path(source).stem not in allowed_stems
+            ]
+            if outside_split:
+                raise SampleManifestError(
+                    f"Dataset manifest contains {len(outside_split)} videos outside "
+                    "the selected annotation split"
+                )
+        clip_set = LazyClipSet(videos_dir, sources, frames, size)
+        return clip_set, [str(videos_dir / Path(source)) for source in sources]
+    if manifest is not None:
+        sources = read_sample_manifest(manifest, videos_dir, max_clips=max_clips)
+        paths = [videos_dir / Path(source) for source in sources]
+        target = len(paths)
+        if allowed_stems is not None:
+            outside_split = [path.stem for path in paths if path.stem not in allowed_stems]
+            if outside_split:
+                raise SampleManifestError(
+                    f"Dataset manifest contains {len(outside_split)} videos outside "
+                    "the selected annotation split"
+                )
+    else:
+        paths = sorted(p for p in videos_dir.rglob("*") if p.suffix.lower() in VIDEO_EXTS)
+        if not paths:
+            raise SystemExit(f"No video files found in {videos_dir}")
+        if allowed_stems is not None:
+            paths = [path for path in paths if path.stem in allowed_stems]
+            if not paths:
+                raise SystemExit(
+                    f"No videos in {videos_dir} match the selected annotation split"
+                )
+            print(f"Annotation filter retained {len(paths)} local videos.")
+        random.Random(seed).shuffle(paths)
+        target = len(paths) if max_clips is None else min(max_clips, len(paths))
 
-    target = min(max_clips, len(paths))
     if use_cache:
         fingerprint = _filter_fingerprint(allowed_stems)
+        desired_sources = [_source_key(path, videos_dir) for path in paths[:target]]
+        if manifest is not None:
+            compatible = _find_compatible_cache(
+                videos_dir, desired_sources, frames, size, seed, fingerprint
+            )
+            if compatible is not None:
+                clips, cached_paths = compatible
+                print(
+                    f"Loading {len(clips)} manifest-selected cached clips from "
+                    f"{clips.cache_dir} ..."
+                )
+                return clips, cached_paths
         cache_dir = videos_dir / (
             f".clip_cache_v{CACHE_VERSION}_{frames}f_{size}px_"
-            f"{max_clips}c_seed{seed}_{fingerprint}"
+            f"{max_clips if max_clips is not None else target}c_seed{seed}_{fingerprint}"
         )
         manifest_path = cache_dir / "manifest.json"
         entries = []
         if manifest_path.is_file():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            if manifest.get("version") != CACHE_VERSION:
+            cache_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if cache_payload.get("version") != CACHE_VERSION:
                 raise RuntimeError(f"Unexpected clip-cache version in {manifest_path}")
             entries = []
             seen_sources = set()
-            for raw_entry in manifest.get("entries", []):
+            for raw_entry in cache_payload.get("entries", []):
                 if not (cache_dir / raw_entry["cache"]).is_file():
                     continue
                 entry = dict(raw_entry)
@@ -188,10 +540,24 @@ def load_clip_set(
                     continue
                 seen_sources.add(entry["source"])
                 entries.append(entry)
-            if len(entries) >= target:
+            if len(entries) >= target and (
+                manifest is None
+                or [entry["source"] for entry in entries[:target]] == desired_sources
+            ):
                 entries = entries[:target]
                 print(f"Loading {len(entries)} sharded cached clips from {cache_dir} ...")
                 return ShardedClipSet(cache_dir, entries), _source_paths(videos_dir, entries)
+            if manifest is not None:
+                cached_sources = [entry["source"] for entry in entries]
+                expected_prefix = desired_sources[: len(cached_sources)]
+                if cached_sources != expected_prefix:
+                    # This cache key predates stable sample manifests and does
+                    # not identify the selected videos.  Retaining unrelated
+                    # entries would let them count toward ``target`` and could
+                    # silently return a different sample than the manifest.
+                    # Exact/full compatible caches were already returned above;
+                    # an exact partial prefix remains safe to resume.
+                    entries = []
         else:
             cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -253,7 +619,7 @@ def load_clip_set(
     clips, kept, skipped = [], [], 0
     pbar = tqdm(paths, desc="Decoding clips", unit="clip", total=target)
     for p in paths:
-        if len(clips) >= max_clips:
+        if len(clips) >= target:
             break
         try:
             clips.append(load_clip(p, frames, size))

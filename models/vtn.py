@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from .common import (
     AdapterMetadata,
     ROOT,
+    checkpoint_path,
     load_exact_state_dict,
     normalize,
     require_file,
@@ -118,7 +119,7 @@ class VTNModel(AdapterMetadata):
 
     MODEL_ZOO = {
         "B": {
-            "checkpoint": ROOT / "checkpoints" / "vtn" / "VTN_VIT_B_KINETICS.pyth",
+            "checkpoint": checkpoint_path("vtn", "VTN_VIT_B_KINETICS.pyth"),
             # Official bomri/SlowFast model-zoo result for this exact checkpoint.
             "accuracy": 77.72,
             # Paper full-video protocol: 250 uniformly sampled frames.

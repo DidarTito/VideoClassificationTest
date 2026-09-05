@@ -1,0 +1,3 @@
+base: default.yaml
+model: video-focalnet-s
+recipe_origin: controlled_fallback

@@ -1,4 +1,10 @@
-"""Strict standalone adapter for the official DualFormer-T Kinetics model."""
+"""Strict standalone adapters for the official DualFormer Kinetics models.
+
+Supported variants: T (exact local checkpoint) and S (exact architecture from
+the official config; requires the official Small K400 checkpoint on disk).
+DualFormer-B (IN21K) is blocked: no public exact IN21K->K400 checkpoint
+exists and the IN1K Base release is a forbidden substitute.
+"""
 from contextlib import contextmanager
 import importlib
 import importlib.util
@@ -14,6 +20,7 @@ import torch.nn.functional as F
 from .common import (
     AdapterMetadata,
     ROOT,
+    checkpoint_path,
     load_exact_state_dict,
     normalize,
     require_file,
@@ -25,12 +32,25 @@ from .common import (
 
 _VENDOR_ROOT = ROOT / "third_party" / "DualFormer"
 _SOURCE = _VENDOR_ROOT / "mmaction" / "models" / "backbones" / "dualformer.py"
-_CHECKPOINT = (
-    ROOT
-    / "checkpoints"
-    / "dualformer"
-    / "dualformer_tiny_patch244_window877.pth"
-)
+_CHECKPOINT = checkpoint_path("dualformer", "dualformer_tiny_patch244_window877.pth")
+_CHECKPOINT_S = checkpoint_path("dualformer", "dualformer_small_patch244_window877.pth")
+
+# Exact architecture rows from the official vendored configs
+# (configs/_base_/models/dualformer/dualformer_{tiny,small,base}.py).
+_ARCH = {
+    "T": {
+        "embed_dims": [64, 128, 256, 512],
+        "num_heads": [2, 4, 8, 16],
+        "depths": [2, 2, 10, 4],
+        "head_in": 512,
+    },
+    "S": {
+        "embed_dims": [96, 192, 384, 768],
+        "num_heads": [3, 6, 12, 24],
+        "depths": [2, 2, 18, 2],
+        "head_in": 768,
+    },
+}
 
 
 class _RegistryShim:
@@ -123,19 +143,26 @@ def _official_backbone_class():
 class _TokenLabelHead(nn.Module):
     """Exact published training head; only ``fc_cls`` is used during testing."""
 
-    def __init__(self):
+    def __init__(self, in_channels=512, with_token_linear=True):
         super().__init__()
         self.dropout = nn.Dropout(0.5)
         self.avg_pool = nn.AdaptiveAvgPool3d((1, 1, 1))
-        self.fc_cls = nn.Linear(512, 400)
-        self.token_linear = nn.Sequential(
-            nn.Linear(512, 1024),
-            nn.Dropout(0.5),
-            nn.ReLU(inplace=True),
-            nn.Linear(1024, 2048),
-            nn.Dropout(0.5),
-            nn.ReLU(inplace=True),
-            nn.Linear(2048, 400),
+        self.fc_cls = nn.Linear(in_channels, 400)
+        # Hidden widths scale with the backbone output width in the released
+        # checkpoints: Tiny 512 -> 1024 -> 2048 -> 400, Small 768 -> 1536 ->
+        # 3072 -> 400.
+        self.token_linear = (
+            nn.Sequential(
+                nn.Linear(in_channels, 2 * in_channels),
+                nn.Dropout(0.5),
+                nn.ReLU(inplace=True),
+                nn.Linear(2 * in_channels, 4 * in_channels),
+                nn.Dropout(0.5),
+                nn.ReLU(inplace=True),
+                nn.Linear(4 * in_channels, 400),
+            )
+            if with_token_linear
+            else None
         )
 
     def forward(self, features):
@@ -145,7 +172,7 @@ class _TokenLabelHead(nn.Module):
 
 
 class _DualFormerClassifier(nn.Module):
-    def __init__(self, backbone_class):
+    def __init__(self, backbone_class, arch, with_token_linear=True):
         super().__init__()
         self.backbone = backbone_class(
             pretrained=None,
@@ -154,21 +181,21 @@ class _DualFormerClassifier(nn.Module):
             patch_size=(2, 4, 4),
             in_chans=3,
             num_classes=1000,
-            embed_dims=[64, 128, 256, 512],
-            num_heads=[2, 4, 8, 16],
+            embed_dims=arch["embed_dims"],
+            num_heads=arch["num_heads"],
             mlp_ratios=[4, 4, 4, 4],
             qkv_bias=True,
             qk_scale=None,
             drop_rate=0.0,
             attn_drop_rate=0.0,
             drop_path_rate=0.1,
-            depths=[2, 2, 10, 4],
+            depths=arch["depths"],
             local_sizes=[(8, 7, 7)] * 4,
             fine_pysizes=[(8, 7, 7), (8, 7, 7), (8, 7, 7), (16, 7, 7)],
             coarse_pysizes=[(4, 4, 4)] * 4,
             temporal_pooling=[-1, 1, 1, 1],
         )
-        self.cls_head = _TokenLabelHead()
+        self.cls_head = _TokenLabelHead(arch["head_in"], with_token_linear)
 
     def forward(self, video):
         return self.cls_head(self.backbone(video))
@@ -182,27 +209,51 @@ class DualFormerModel(AdapterMetadata):
             "gflops": 240.0,
             "frames": 32,
             "sampling_rate": 2,
-        }
+            "name": "DualFormer-T",
+        },
+        "S": {
+            "checkpoint": _CHECKPOINT_S,
+            "accuracy": 80.6,
+            "gflops": 159.0,
+            "frames": 32,
+            "sampling_rate": 2,
+            "name": "DualFormer-S",
+        },
     }
 
     def __init__(self, variant="T", device="cuda", dataset="k400"):
-        self.dataset = require_dataset(dataset, ("k400",), "DualFormer-T")
-        variant = variant.upper()
-        if variant != "T":
-            raise ValueError(f"Only DualFormer-T is supported, received {variant}")
+        variant = str(variant).upper()
+        if variant in {"B", "B-IN21K"}:
+            # Frozen row 14 requires the IN21K-pretrained -> K400 Base
+            # configuration (82.9). The only public Base checkpoint
+            # (checkpoints/dualformer/dualformer_base_patch244_window877.pth)
+            # is the IN1K 81.1 model and is a forbidden substitute.
+            raise RuntimeError(
+                "DualFormer-B (IN21K) is BLOCKED: no public exact "
+                "IN21K-pretrained K400 checkpoint exists. The local "
+                "dualformer_base_patch244_window877.pth is the IN1K (81.1) "
+                "model and must not be silently substituted."
+            )
+        if variant not in self.MODEL_ZOO:
+            raise ValueError(
+                f"Unknown DualFormer variant {variant!r}; supported: T, S "
+                "(B-IN21K is blocked pending an exact checkpoint)"
+            )
+        self.dataset = require_dataset(
+            dataset, ("k400",), self.MODEL_ZOO[variant]["name"]
+        )
         self.variant = variant
         self.info = self.MODEL_ZOO[variant]
         checkpoint_path = require_file(
             self.info["checkpoint"],
-            "DualFormer-T cannot run because the official Kinetics-400 checkpoint "
-            f"is missing: {self.info['checkpoint']}. A randomly initialized model "
-            "is not a valid benchmark target.",
+            f"{self.info['name']} cannot run because the official Kinetics-400 "
+            f"checkpoint is missing: {self.info['checkpoint']}. A randomly "
+            "initialized model is not a valid benchmark target.",
         )
         self.device = torch.device(
             device if not str(device).startswith("cuda") or torch.cuda.is_available() else "cpu"
         )
 
-        model = _DualFormerClassifier(_official_backbone_class())
         state = torch.load(
             checkpoint_path,
             map_location="cpu",
@@ -211,6 +262,15 @@ class DualFormerModel(AdapterMetadata):
         )
         if not isinstance(state, dict) or not state:
             raise RuntimeError(f"Unexpected DualFormer checkpoint structure: {checkpoint_path}")
+        # The Tiny release was trained with the auxiliary token-label head;
+        # build the head to match the checkpoint keys exactly so the load
+        # remains strict for every released variant.
+        with_token_linear = any(
+            key.startswith("cls_head.token_linear") for key in state
+        )
+        model = _DualFormerClassifier(
+            _official_backbone_class(), _ARCH[variant], with_token_linear
+        )
         load_exact_state_dict(model, state, checkpoint_path)
         if model.cls_head.fc_cls.out_features != 400:
             raise RuntimeError(f"{checkpoint_path} does not provide a 400-class head")
@@ -245,7 +305,7 @@ class DualFormerModel(AdapterMetadata):
 
     @property
     def name(self):
-        return "DualFormer-T"
+        return str(self.info["name"])
 
 
 __all__ = ["DualFormerModel"]

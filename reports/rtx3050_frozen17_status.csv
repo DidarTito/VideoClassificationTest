@@ -1,0 +1,18 @@
+model,canonical_key,existing_run,exact_architecture,exact_checkpoint,exact_frames,same_subset,same_preprocessing,reusable,action
+UniFormer-S,uniformer-s,results\rtx3050\k400_1000_seed0_20260722\device_metrics.csv,True,False,True,True,False,False,RERUN_CONFIGURATION
+DualFormer-T,dualformer-t,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+Video-FocalNet-T,video-focalnet-t,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+VideoSwin-T,videoswin-t,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+"MViT-B, 16x4",mvit-v1-b-16x4,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,False,True,True,False,RERUN_CONFIGURATION
+Video-FocalNet-S,video-focalnet-s,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+"MViT-B, 32x3",mvit-v1-b-32x3,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+DualFormer-S,dualformer-s,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+VideoSwin-S,videoswin-s,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+"ZeroI2V ViT-B/16, 8f",zeroi2v-b16-8f,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,False,False,False,False,False,False,BLOCKED_RUNTIME
+Video-FocalNet-B,video-focalnet-b,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+UniFormer-B,uniformer-b,results\rtx3050\k400_1000_seed0_20260722\device_metrics.csv,False,False,False,False,False,False,BLOCKED_EXACT_CHECKPOINT
+VideoMAE-B,videomae-b,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,False,True,True,False,False,RERUN_CONFIGURATION
+DualFormer-B (IN21K),dualformer-b-in21k,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,False,False,False,False,False,False,BLOCKED_EXACT_CHECKPOINT
+Omnivore-B (IN21K),omnivore-b-in21k,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+VideoSwin-B,videoswin-b,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE
+TimeSformer-B,timesformer-b,results\NVIDIA_GeForce_RTX_3050_Laptop_GPU\k400\full_1000_seed0\device_metrics.csv,True,True,True,True,True,True,VALID_REUSE

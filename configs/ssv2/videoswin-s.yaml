@@ -1,0 +1,3 @@
+base: default.yaml
+model: videoswin-s
+recipe_origin: controlled_fallback

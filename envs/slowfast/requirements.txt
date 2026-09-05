@@ -1,0 +1,3 @@
+# SlowFast source is vendored and pinned; retain modern CUDA-capable torch.
+-r ../core-modern/requirements.txt
+simplejson

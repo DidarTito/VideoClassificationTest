@@ -1,0 +1,3 @@
+model,checkpoint_status,environment,import,checkpoint_load,head_174,forward,backward,optimizer_step,smoke_train,smoke_val,resume,microbatch,grad_accum,peak_vram,status,error
+uniformer-s,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,1,16,,PASS,
+videomae-b,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,1,16,,PASS,

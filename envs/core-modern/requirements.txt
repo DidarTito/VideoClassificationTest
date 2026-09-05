@@ -1,0 +1,3 @@
+# Install a Blackwell-capable PyTorch wheel first; setup_rtx5070_linux.sh does this.
+-r ../../requirements.txt
+nvidia-ml-py==13.610.43

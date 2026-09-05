@@ -1,0 +1,332 @@
+schema_version: 1
+name: frozen17
+dataset:
+  name: ssv2
+  num_classes: 174
+  selection_rule: highest_val_top1_then_earlier_epoch
+  seeds: [0]
+benchmark_manifests:
+  k400_1000_seed0:
+    path: manifests/k400_1000_seed0.csv
+    sha256: b8ec0d92f50b4ae5dff46754f62c2ef1b2b8467332f88bb0cc29c8e6172ff749
+  ssv2_1000_seed0:
+    path: manifests/ssv2_1000_seed0.csv
+    sha256: c0b8d5fc57ced12f57fb50468e281cae9d98b5a16e15e79be37de8de2c0c8c02
+models:
+  - key: uniformer-s
+    display_name: UniFormer-S
+    family: uniformer
+    source_repo: https://github.com/Sense-X/UniFormer
+    source_commit: 52a0415e4e0d
+    training_backend: uniformer_slowfast
+    environment_name: core-modern
+    k400_checkpoint: checkpoints/uniformer/uniformer_small_k400_16x4.pth
+    checkpoint_sha256: 4829a6abe934a1c8083f377afea621f01d16bc4a93ce6ae74d7c5bea7eff6a7b
+    checkpoint_origin: official_google_drive
+    checkpoint_status: READY_EXACT
+    pretraining: K400 supervised (official 16x4 training checkpoint; paper row uses 16-frame evaluation)
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 16, sampling_rate: 4, resolution: 224, tensor_layout: BCTHW_pathway, mean: [0.45, 0.45, 0.45], std: [0.225, 0.225, 0.225]}
+    classifier: {path: head, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 80.8, gflops_per_view: 41.8, paper_total_inference_gflops: 167.0, params_m: 21.5}
+    finetune: {config: configs/ssv2/uniformer-s.yaml, recipe_origin: controlled_fallback, amp_mode: bf16_if_supported, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: dualformer-t
+    display_name: DualFormer-T
+    family: dualformer
+    source_repo: https://github.com/sail-sg/dualformer
+    source_commit: 058c10c6a078
+    training_backend: mmaction_legacy
+    environment_name: mmaction-legacy
+    k400_checkpoint: checkpoints/dualformer/dualformer_tiny_patch244_window877.pth
+    checkpoint_sha256: f27c1c1996e4d27bc5c71f2bf3f690d933d8ea378030fb9e9e93c816872deb46
+    checkpoint_origin: official_google_drive_1dvG6vjC7udHTwTaqmOAfn6U3HNs3T-QF
+    checkpoint_status: READY_EXACT
+    pretraining: IN1K then K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 2, resolution: 224, tensor_layout: BCTHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 79.5, gflops_per_view: 60.0, paper_total_inference_gflops: 240.0, params_m: 21.8}
+    finetune: {config: configs/ssv2/dualformer-t.yaml, recipe_origin: controlled_fallback, amp_mode: fp16, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - &focal_t
+    key: video-focalnet-t
+    display_name: Video-FocalNet-T
+    family: video-focalnet
+    source_repo: https://github.com/TalalWasim/Video-FocalNets
+    source_commit: 39eba998ebaf
+    training_backend: video_focalnet_native
+    environment_name: core-modern
+    k400_checkpoint: checkpoints/focalnet/video-focalnet_tiny_kinetics400.pth
+    checkpoint_sha256: 86fb70adbd28e0fc8c9ca8c7ed36d52482a0c58507ad15820c8849bfb634b9ed
+    checkpoint_origin: official_google_drive
+    checkpoint_status: READY_EXACT
+    pretraining: K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 8, sampling_rate: 8, resolution: 224, tensor_layout: BTCHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: head, source_classes: 400, target_classes: 174}
+    # The paper's 28M figure is the spatial FocalNet backbone count. The
+    # official Video-FocalNet checkpoint also contains temporal modulation
+    # parameters; its strict state dict has 49.553272M parameters.
+    stage1: {paper_top1: 79.8, gflops_per_view: 63.0, params_m: 28.0}
+    runtime_actual_params_m: 49.553272
+    runtime_param_source: sum of all parameters in the strict official K400 Video-FocalNet checkpoint graph, including classifier head
+    finetune: {config: configs/ssv2/video-focalnet-t.yaml, recipe_origin: controlled_fallback, amp_mode: bf16_if_supported, gradient_checkpointing: false, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: videoswin-t
+    display_name: VideoSwin-T
+    family: videoswin
+    source_repo: https://github.com/SwinTransformer/Video-Swin-Transformer
+    source_commit: db018fb88962
+    training_backend: mmaction_legacy
+    environment_name: mmaction-legacy
+    k400_checkpoint: checkpoints/videoswin/swin_tiny_patch244_window877_kinetics400_1k.pth
+    checkpoint_sha256: 9950e3be6b0b3763f80575dfbbe7db7cbeb18345e32363b73e8d44952ef76acc
+    checkpoint_origin: https://github.com/SwinTransformer/storage/releases/download/v1.0.4/swin_tiny_patch244_window877_kinetics400_1k.pth
+    checkpoint_status: READY_EXACT
+    pretraining: IN1K then K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 2, resolution: 224, tensor_layout: BCTHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 78.8, gflops_per_view: 88.0, params_m: 28.2}
+    finetune: {config: configs/ssv2/videoswin-t.yaml, recipe_origin: controlled_fallback, amp_mode: fp16, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: mvit-v1-b-16x4
+    display_name: MViT-B, 16x4
+    family: mvit-v1
+    source_repo: https://github.com/facebookresearch/SlowFast
+    source_commit: 287ec0076846
+    training_backend: slowfast
+    environment_name: slowfast
+    k400_checkpoint: checkpoints/mvit/MVIT_B_16x4.pyth
+    checkpoint_sha256: f2771e3919cd9339f4301f25476e91be26b2ebfdf11b633df2701e4867283007
+    checkpoint_origin: https://dl.fbaipublicfiles.com/pytorchvideo/model_zoo/kinetics/MVIT_B_16x4.pyth
+    checkpoint_status: READY_EXACT
+    pretraining: K400 supervised; MViTv1 B-Conv, never MViTv2
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 16, sampling_rate: 4, resolution: 224, tensor_layout: BCTHW, mean: [0.45, 0.45, 0.45], std: [0.225, 0.225, 0.225]}
+    classifier: {path: head.proj, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 78.4, gflops_per_view: 70.5, params_m: 36.6}
+    finetune: {config: configs/ssv2/mvit-v1-b-16x4.yaml, recipe_origin: derived_within_family, amp_mode: bf16_if_supported, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: video-focalnet-s
+    display_name: Video-FocalNet-S
+    family: video-focalnet
+    source_repo: https://github.com/TalalWasim/Video-FocalNets
+    source_commit: 39eba998ebaf
+    training_backend: video_focalnet_native
+    environment_name: core-modern
+    k400_checkpoint: checkpoints/focalnet/video-focalnet_small_kinetics400.pth
+    checkpoint_sha256: 5031b6372b6a91b7a0be4762bc58c8d47318896a91a3f4fe0a9730d28cef4bd2
+    checkpoint_origin: official_google_drive
+    checkpoint_status: READY_EXACT
+    pretraining: K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 8, sampling_rate: 8, resolution: 224, tensor_layout: BTCHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: head, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 81.4, gflops_per_view: 124.0, params_m: 49.0}
+    runtime_actual_params_m: 88.735168
+    runtime_param_source: sum of all parameters in the strict official K400 Video-FocalNet checkpoint graph, including classifier head
+    finetune: {config: configs/ssv2/video-focalnet-s.yaml, recipe_origin: controlled_fallback, amp_mode: bf16_if_supported, gradient_checkpointing: false, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: mvit-v1-b-32x3
+    display_name: MViT-B, 32x3
+    family: mvit-v1
+    source_repo: https://github.com/facebookresearch/SlowFast
+    source_commit: 287ec0076846
+    training_backend: slowfast
+    environment_name: slowfast
+    k400_checkpoint: checkpoints/mvit/MVIT_B_32x3_f294077834.pyth
+    checkpoint_sha256: ee62dd4c41f4cf0622a690c55bb3fea5c5685443cf0b4cb444327961047e5064
+    checkpoint_origin: https://dl.fbaipublicfiles.com/pytorchvideo/model_zoo/kinetics/MVIT_B_32x3_f294077834.pyth
+    checkpoint_status: READY_EXACT
+    pretraining: K400 supervised; MViTv1 B-Conv, never MViTv2
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 3, resolution: 224, tensor_layout: BCTHW, mean: [0.45, 0.45, 0.45], std: [0.225, 0.225, 0.225]}
+    classifier: {path: head.proj, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 80.2, gflops_per_view: 170.0, params_m: 36.6}
+    finetune: {config: configs/ssv2/mvit-v1-b-32x3.yaml, recipe_origin: derived_within_family, amp_mode: bf16_if_supported, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: dualformer-s
+    display_name: DualFormer-S
+    family: dualformer
+    source_repo: https://github.com/sail-sg/dualformer
+    source_commit: 058c10c6a078
+    training_backend: mmaction_legacy
+    environment_name: mmaction-legacy
+    k400_checkpoint: checkpoints/dualformer/dualformer_small_patch244_window877.pth
+    checkpoint_sha256: 1a377476e1244c86fdf0f2bb639ac88906e85ad328d951fc648567ce0ba17cce
+    checkpoint_origin: https://drive.google.com/file/d/1dNHPnSl39Vbh7Z-KSWYjNV3PGFlWL3TY/view
+    checkpoint_status: READY_EXACT
+    pretraining: IN1K then K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 2, resolution: 224, tensor_layout: BCTHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 80.6, gflops_per_view: 159.0, params_m: 48.9}
+    finetune: {config: configs/ssv2/dualformer-s.yaml, recipe_origin: controlled_fallback, amp_mode: fp16, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: videoswin-s
+    display_name: VideoSwin-S
+    family: videoswin
+    source_repo: https://github.com/SwinTransformer/Video-Swin-Transformer
+    source_commit: db018fb88962
+    training_backend: mmaction_legacy
+    environment_name: mmaction-legacy
+    k400_checkpoint: checkpoints/videoswin/swin_small_patch244_window877_kinetics400_1k.pth
+    checkpoint_sha256: 7e05aa13cfa1aa99fe78c1ccac96c263344b315fe5d98a165b77b1f7532ce500
+    checkpoint_origin: https://github.com/SwinTransformer/storage/releases/download/v1.0.4/swin_small_patch244_window877_kinetics400_1k.pth
+    checkpoint_status: READY_EXACT
+    pretraining: IN1K then K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 2, resolution: 224, tensor_layout: BCTHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 80.6, gflops_per_view: 166.0, params_m: 49.8}
+    finetune: {config: configs/ssv2/videoswin-s.yaml, recipe_origin: controlled_fallback, amp_mode: fp16, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: zeroi2v-b16-8f
+    display_name: ZeroI2V ViT-B/16, 8f
+    family: zeroi2v
+    source_repo: https://github.com/MCG-NJU/ZeroI2V
+    source_commit: f091983e3fed6d60158131c04479fcdd68c80990
+    training_backend: mmaction2_modern
+    environment_name: mmaction2-modern
+    k400_checkpoint: checkpoints/ZeroI2V/CLIP-B_k400_8x16x1.pth
+    checkpoint_sha256: f62f2e10aa0ae0cb755046f9d84b5ecffd58d4a5f1ae043ace88c3b27621929f
+    checkpoint_origin: official_project_model_zoo
+    checkpoint_status: READY_NEEDS_CONFIG_VALIDATION
+    pretraining: CLIP ViT-B/16 adapted then K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 8, sampling_rate: 16, resolution: 224, tensor_layout: BCTHW, mean: [0.48145466, 0.4578275, 0.40821073], std: [0.26862954, 0.26130258, 0.27577711]}
+    classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 83.0, gflops_per_view: 140.67, params_m: 86.0}
+    finetune: {config: configs/ssv2/zeroi2v-b16-8f.yaml, recipe_origin: controlled_fallback, amp_mode: fp16, gradient_checkpointing: false, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: video-focalnet-b
+    display_name: Video-FocalNet-B
+    family: video-focalnet
+    source_repo: https://github.com/TalalWasim/Video-FocalNets
+    source_commit: 39eba998ebaf
+    training_backend: video_focalnet_native
+    environment_name: core-modern
+    k400_checkpoint: checkpoints/focalnet/video-focalnet_base_kinetics400.pth
+    checkpoint_sha256: 5ccba3459e69dc975e893a06513a5dc26d5e7617b3819bac7b66d2fa314be711
+    checkpoint_origin: official_google_drive
+    checkpoint_status: READY_EXACT
+    pretraining: K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 8, sampling_rate: 8, resolution: 224, tensor_layout: BTCHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: head, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 83.6, gflops_per_view: 149.0, params_m: 88.0}
+    runtime_actual_params_m: 157.389216
+    runtime_param_source: sum of all parameters in the strict official K400 Video-FocalNet checkpoint graph, including classifier head
+    finetune: {config: configs/ssv2/video-focalnet-b.yaml, recipe_origin: controlled_fallback, amp_mode: bf16_if_supported, gradient_checkpointing: false, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: uniformer-b
+    display_name: UniFormer-B
+    family: uniformer
+    source_repo: https://github.com/Sense-X/UniFormer
+    source_commit: 52a0415e4e0d
+    training_backend: uniformer_slowfast
+    environment_name: core-modern
+    k400_checkpoint: checkpoints/uniformer/uniformer_base_k400_32x4.pth
+    checkpoint_sha256: null
+    checkpoint_origin: https://drive.google.com/file/d/1gHxx8cr1H0CNvngj1kB9ArgcPfJtqjCV/view
+    checkpoint_status: BLOCKED_EXACT_ARTIFACT
+    pretraining: K400 supervised; official 32x4 checkpoint is distinct from the local 16x4/82.0 artifact
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 4, resolution: 224, tensor_layout: BCTHW_pathway, mean: [0.45, 0.45, 0.45], std: [0.225, 0.225, 0.225]}
+    classifier: {path: head, source_classes: 400, target_classes: 174}
+    checkpoint_published: {paper_top1: 82.9, gflops_per_view: 259.0, params_m: 50.3}
+    stage1: {paper_top1: 82.9, gflops_per_view: 259.0, paper_total_inference_gflops: 1036.0, params_m: 50.3}
+    finetune: {config: configs/ssv2/uniformer-b.yaml, recipe_origin: controlled_fallback, amp_mode: bf16_if_supported, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: videomae-b
+    display_name: VideoMAE-B
+    family: videomae
+    source_repo: https://github.com/MCG-NJU/VideoMAE
+    source_commit: 14ef8d856287
+    training_backend: videomae_native
+    environment_name: core-modern
+    k400_checkpoint: checkpoints/videomae/videomae_vit_b_k400_1600e_ft.pth
+    checkpoint_sha256: 655e6d74924d76dd194ed72904b1541864ff27b0afe0be2c5e9e9c6778dd334d
+    checkpoint_origin: https://drive.google.com/file/d/1MzwteHH-1yuMnFb8vRBQDvngV1Zl-d3z/view
+    checkpoint_status: READY_EXACT
+    pretraining: Official VideoMAE ViT-B 1600-epoch K400 pretraining then K400 fine-tuning (81.5)
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 16, sampling_rate: 4, resolution: 224, tensor_layout: BTCHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: head, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 81.5, gflops_per_view: 180.0, params_m: 87.0}
+    finetune: {config: configs/ssv2/videomae-b.yaml, recipe_origin: controlled_k400_to_ssv2, amp_mode: bf16_if_supported, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: dualformer-b-in21k
+    display_name: DualFormer-B (IN21K)
+    family: dualformer
+    source_repo: https://github.com/sail-sg/dualformer
+    source_commit: 058c10c6a078
+    training_backend: mmaction_legacy
+    environment_name: mmaction-legacy
+    k400_checkpoint: null
+    checkpoint_sha256: null
+    checkpoint_origin: no_public_exact_checkpoint_found
+    checkpoint_status: BLOCKED_EXACT_CHECKPOINT
+    pretraining: required IN21K then K400 supervised; public Base is IN1K 81.1 and is forbidden as a substitute
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 2, resolution: 224, tensor_layout: BCTHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 82.9, gflops_per_view: 268.0, params_m: 86.8}
+    finetune: {config: configs/ssv2/dualformer-b-in21k.yaml, recipe_origin: blocked, amp_mode: fp16, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: omnivore-b-in21k
+    display_name: Omnivore-B (IN21K)
+    family: omnivore
+    source_repo: https://github.com/facebookresearch/omnivore
+    source_commit: 1d55abdc8dfc
+    training_backend: omnivore_native
+    environment_name: core-modern
+    k400_checkpoint: checkpoints/omnivore/swinB_In21k_checkpoint.torch
+    checkpoint_sha256: 55707dba9353d1e2be1ae67bf989e468493f487e2f3ad44f951c249e1bd8d2e8
+    checkpoint_origin: https://dl.fbaipublicfiles.com/omnivore/models/swinB_In21k_checkpoint.torch
+    checkpoint_status: READY_EXACT
+    pretraining: joint IN21K+IN1K+K400+SUN; checkpoint contains 400-class K400 video head
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 40, resolution: 224, tensor_layout: BCTHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: heads.video.1, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 84.0, gflops_per_view: 282.0, params_m: 88.1}
+    finetune: {config: configs/ssv2/omnivore-b-in21k.yaml, recipe_origin: controlled_fallback, amp_mode: bf16_if_supported, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: videoswin-b
+    display_name: VideoSwin-B
+    family: videoswin
+    source_repo: https://github.com/SwinTransformer/Video-Swin-Transformer
+    source_commit: db018fb88962
+    training_backend: mmaction_legacy
+    environment_name: mmaction-legacy
+    k400_checkpoint: checkpoints/videoswin/swin_base_patch244_window877_kinetics400_1k.pth
+    checkpoint_sha256: 309e76e2cba4b3052eb3afda3ee57205130712369cbde6bf2fad05127e2f9bf8
+    checkpoint_origin: https://github.com/SwinTransformer/storage/releases/download/v1.0.4/swin_base_patch244_window877_kinetics400_1k.pth
+    checkpoint_status: READY_EXACT
+    pretraining: IN1K then K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 32, sampling_rate: 2, resolution: 224, tensor_layout: BCTHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
+    classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 80.6, gflops_per_view: 282.0, params_m: 88.1}
+    finetune: {config: configs/ssv2/videoswin-b.yaml, recipe_origin: controlled_fallback, amp_mode: fp16, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
+  - key: timesformer-b
+    display_name: TimeSformer-B
+    family: timesformer
+    source_repo: https://github.com/facebookresearch/TimeSformer
+    source_commit: a5ef29a7b726
+    training_backend: timesformer_native
+    environment_name: core-modern
+    k400_checkpoint: checkpoints/timesformer/TimeSformer_divST_8x32_224_K400.pyth
+    checkpoint_sha256: 45c4eeccc4956447a4fca765b665b443c701d8d2e8ae600510565a649651d973
+    checkpoint_origin: https://www.dropbox.com/s/g5t24we9gl5yk88/TimeSformer_divST_8x32_224_K400.pyth?dl=0
+    checkpoint_status: READY_EXACT
+    pretraining: ImageNet then K400 supervised
+    k400_classes: 400
+    ssv2_classes: 174
+    input: {num_frames: 8, sampling_rate: 32, resolution: 224, tensor_layout: BCTHW, mean: [0.45, 0.45, 0.45], std: [0.225, 0.225, 0.225]}
+    classifier: {path: model.head, source_classes: 400, target_classes: 174}
+    stage1: {paper_top1: 78.0, gflops_per_view: 196.7, params_m: 121.4}
+    finetune: {config: configs/ssv2/timesformer-b.yaml, recipe_origin: controlled_k400_to_ssv2, amp_mode: bf16_if_supported, gradient_checkpointing: false, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}

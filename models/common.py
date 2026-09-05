@@ -10,6 +10,8 @@ import torch
 from .kinetics_labels import kinetics400_classes
 
 ROOT = Path(__file__).resolve().parents[1]
+_CHECKPOINT_ROOT = ROOT / "checkpoints"
+_DATASET_ROOT_OVERRIDES = {}
 
 DATASETS = {
     "k400": {"num_classes": 400, "directory": "kinetics400"},
@@ -24,6 +26,22 @@ DATASET_ALIASES = {
     "sthv2": "ssv2",
     "something-something-v2": "ssv2",
 }
+
+
+def set_checkpoint_root(path):
+    """Set the checkpoint root before lazy adapter modules are imported."""
+    global _CHECKPOINT_ROOT
+    _CHECKPOINT_ROOT = Path(path).expanduser().resolve()
+
+
+def checkpoint_path(*parts):
+    """Return a path below the configured checkpoint root."""
+    return _CHECKPOINT_ROOT.joinpath(*parts)
+
+
+def set_dataset_root(dataset, path):
+    """Override one dataset root for adapter class-name resolution."""
+    _DATASET_ROOT_OVERRIDES[canonical_dataset(dataset)] = Path(path).expanduser().resolve()
 
 
 class ModelUnavailableError(RuntimeError):
@@ -62,7 +80,13 @@ def dataset_class_names(dataset, dataset_root=None):
     per class, the same measured-accuracy path used for K400 works unchanged.
     """
     dataset = canonical_dataset(dataset)
-    root = Path(dataset_root) if dataset_root else ROOT / "datasets" / DATASETS[dataset]["directory"]
+    root = (
+        Path(dataset_root)
+        if dataset_root
+        else _DATASET_ROOT_OVERRIDES.get(
+            dataset, ROOT / "datasets" / DATASETS[dataset]["directory"]
+        )
+    )
     if root.is_dir():
         names = sorted(path.name for path in root.iterdir() if path.is_dir())
         if len(names) == dataset_num_classes(dataset):

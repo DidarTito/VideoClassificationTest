@@ -1,0 +1,3 @@
+base: default.yaml
+model: zeroi2v-b16-8f
+recipe_origin: controlled_fallback

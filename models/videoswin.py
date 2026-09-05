@@ -12,6 +12,7 @@ from .common import (
     AdapterMetadata,
     ModelUnavailableError,
     ROOT,
+    checkpoint_path as configured_checkpoint_path,
     canonical_dataset,
     dataset_num_classes,
     normalize,
@@ -126,10 +127,17 @@ class VideoSwinModel(AdapterMetadata):
                 raise ModelUnavailableError(
                     f"VideoSwin-{self.variant} has no SSV2 checkpoint in checkpoints/videoswin"
                 )
+            # LEGACY released classifier, quarantined per Phase 3; used only by
+            # the legacy SSV2 inference experiment, never for fine-tuning.
             self.info.update(checkpoint="swin_base_patch244_window1677_sthv2.pth",
                              window=(16, 7, 7), drop_path=0.4,
                              accuracy=69.6, gflops=320.6)
-        checkpoint_path = require_file(ROOT / "checkpoints" / "videoswin" / self.info["checkpoint"])
+        checkpoint_subdir = (
+            "legacy_ssv2_released" if self.dataset == "ssv2" else "videoswin"
+        )
+        checkpoint_path = require_file(
+            configured_checkpoint_path(checkpoint_subdir, self.info["checkpoint"])
+        )
         self.device = torch.device(device if not str(device).startswith("cuda") or torch.cuda.is_available() else "cpu")
         model = _Classifier(_backbone_class(), self.info, dataset_num_classes(self.dataset))
         payload = torch.load(checkpoint_path, map_location="cpu", weights_only=True)

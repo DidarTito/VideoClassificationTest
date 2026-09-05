@@ -10,6 +10,7 @@ import torch
 from .common import (
     AdapterMetadata,
     ROOT,
+    checkpoint_path,
     normalize,
     require_file,
     sample_frames,
@@ -78,7 +79,7 @@ class OmnivoreModel(AdapterMetadata):
 
     MODEL_ZOO = {
         "B-IN21K": {
-            "checkpoint": ROOT / "checkpoints" / "omnivore" / "swinB_In21k_checkpoint.torch",
+            "checkpoint": checkpoint_path("omnivore", "swinB_In21k_checkpoint.torch"),
             "builder": "omnivore_swinB_imagenet21k",
             "name": "Omnivore-B (IN21K)",
             "accuracy": 84.0,
@@ -87,7 +88,7 @@ class OmnivoreModel(AdapterMetadata):
             "sampling_rate": 40,
         },
         "B-STANDARD": {
-            "checkpoint": ROOT / "checkpoints" / "omnivore" / "Omnivore_swinB_checkpoint.torch",
+            "checkpoint": checkpoint_path("omnivore", "Omnivore_swinB_checkpoint.torch"),
             "builder": "omnivore_swinB",
             "name": "Omnivore-B (standard)",
             "accuracy": 83.3,

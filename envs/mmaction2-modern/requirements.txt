@@ -1,0 +1,4 @@
+-r ../core-modern/requirements.txt
+mmengine==0.10.7
+# mmaction2 is installed editable from pinned third_party/ZeroI2V by the
+# Linux setup script; installing the PyPI package would bypass its plugin.

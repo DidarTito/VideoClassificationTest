@@ -1,0 +1,3 @@
+base: default.yaml
+model: timesformer-b
+recipe_origin: controlled_k400_to_ssv2

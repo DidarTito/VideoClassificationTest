@@ -1,0 +1,15 @@
+key: dualformer-b-in1k-diagnostic
+display_name: DualFormer-B (IN1K diagnostic)
+base_frozen_key: dualformer-b-in21k
+protocol_deviation: true
+counts_toward_frozen17: false
+include_in_frozen17: false
+reason: Official public Base checkpoint is IN1K/81.1, not the frozen IN21K/82.9 result.
+checkpoint: checkpoints/dualformer/dualformer_base_patch244_window877.pth
+checkpoint_origin: official DualFormer model zoo
+published_top1: 81.1
+input:
+  num_frames: 32
+  sampling_rate: 2
+  resolution: 224
+  tensor_layout: BCTHW

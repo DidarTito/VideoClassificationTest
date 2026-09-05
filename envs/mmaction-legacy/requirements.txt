@@ -1,0 +1,4 @@
+# Isolated because DualFormer/VideoSwin vendor legacy MMAction/MMCV APIs.
+# Use the model source shims where possible; do not install an old CUDA torch.
+-r ../core-modern/requirements.txt
+mmcv==1.7.2

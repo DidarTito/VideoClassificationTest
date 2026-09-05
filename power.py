@@ -12,6 +12,170 @@ import re
 import shutil
 import subprocess
 import threading
+from dataclasses import asdict, dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class NvmlProbeResult:
+    """Best-effort NVML metadata for one physical NVIDIA device.
+
+    Probing is deliberately non-throwing: optional telemetry such as board
+    power and temperature is not available on every NVIDIA device/driver.
+    ``available`` means that NVML initialized and returned a handle for the
+    requested index; individual fields can still be ``None``.
+    """
+
+    available: bool
+    device_index: int
+    name: str | None = None
+    total_memory_bytes: int | None = None
+    driver_version: str | None = None
+    temperature_c: float | None = None
+    power_supported: bool = False
+    error: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _nvml_text(value):
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def _normalized_gpu_uuid(value):
+    text = (_nvml_text(value) or "").strip().lower()
+    return text[4:] if text.startswith("gpu-") else text
+
+
+def find_nvml_device_index(gpu_uuid):
+    """Map a CUDA device UUID to its physical NVML index, if possible.
+
+    PyTorch indices are logical and can be reordered by CUDA_VISIBLE_DEVICES;
+    NVML indices remain physical.  UUID matching keeps power and temperature
+    attached to the CUDA device that actually runs inference.
+    """
+    target = _normalized_gpu_uuid(gpu_uuid)
+    if not target:
+        return None
+    initialized = False
+    try:
+        import pynvml
+
+        pynvml.nvmlInit()
+        initialized = True
+        count = int(pynvml.nvmlDeviceGetCount())
+        for index in range(count):
+            handle = pynvml.nvmlDeviceGetHandleByIndex(index)
+            if _normalized_gpu_uuid(pynvml.nvmlDeviceGetUUID(handle)) == target:
+                return index
+    except Exception:
+        return None
+    finally:
+        if initialized:
+            try:
+                pynvml.nvmlShutdown()
+            except Exception:
+                pass
+    return None
+
+
+def probe_nvidia_smi_name(device_index=0):
+    """Return a GPU name through nvidia-smi, or ``None`` when unavailable."""
+    if not shutil.which("nvidia-smi"):
+        return None
+    try:
+        completed = subprocess.run(
+            [
+                "nvidia-smi",
+                f"--id={int(device_index)}",
+                "--query-gpu=name",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+    except Exception:
+        return None
+    name = completed.stdout.strip().splitlines()
+    return name[0].strip() if name and name[0].strip() else None
+
+
+def probe_nvml(device_index=0):
+    """Return non-throwing NVML metadata for ``device_index``.
+
+    This is intended for startup/preflight checks.  It never fabricates
+    readings and always attempts ``nvmlShutdown`` after a successful init.
+    Unsupported optional queries simply remain unavailable.
+    """
+
+    index = int(device_index)
+    initialized = False
+    try:
+        import pynvml
+    except Exception as exc:
+        return NvmlProbeResult(
+            available=False,
+            device_index=index,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+
+    try:
+        pynvml.nvmlInit()
+        initialized = True
+        handle = pynvml.nvmlDeviceGetHandleByIndex(index)
+
+        def optional(function_name, *args):
+            function = getattr(pynvml, function_name, None)
+            if function is None:
+                return None
+            try:
+                return function(*args)
+            except Exception:
+                return None
+
+        name = _nvml_text(optional("nvmlDeviceGetName", handle))
+        driver = _nvml_text(optional("nvmlSystemGetDriverVersion"))
+        memory = optional("nvmlDeviceGetMemoryInfo", handle)
+        total_memory = getattr(memory, "total", None) if memory is not None else None
+        if total_memory is not None:
+            total_memory = int(total_memory)
+
+        temperature_kind = getattr(pynvml, "NVML_TEMPERATURE_GPU", 0)
+        temperature = optional(
+            "nvmlDeviceGetTemperature", handle, temperature_kind
+        )
+        if temperature is not None:
+            temperature = float(temperature)
+
+        power = optional("nvmlDeviceGetPowerUsage", handle)
+        return NvmlProbeResult(
+            available=True,
+            device_index=index,
+            name=name,
+            total_memory_bytes=total_memory,
+            driver_version=driver,
+            temperature_c=temperature,
+            power_supported=power is not None,
+        )
+    except Exception as exc:
+        return NvmlProbeResult(
+            available=False,
+            device_index=index,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+    finally:
+        if initialized:
+            try:
+                pynvml.nvmlShutdown()
+            except Exception:
+                pass
 
 
 class _StreamingLogger:
@@ -135,10 +299,12 @@ class PynvmlLogger:
 class NvidiaSmiLogger(_StreamingLogger):
     backend = "nvidia-smi (NVML)"
 
-    def __init__(self, interval_ms=20):
+    def __init__(self, interval_ms=20, device_index=0):
         super().__init__()
+        self.device_index = int(device_index)
         self.cmd = [
-            "nvidia-smi", "--query-gpu=power.draw",
+            "nvidia-smi", f"--id={self.device_index}",
+            "--query-gpu=power.draw",
             "--format=csv,noheader,nounits", "-lms", str(interval_ms),
         ]
         self.pattern = re.compile(r"([\d.]+)")
@@ -164,15 +330,19 @@ def make_power_logger(kind="auto", interval_ms=20, device_index=0):
     if kind == "nvml":
         return PynvmlLogger(interval_ms, device_index)
     if kind == "nvidia-smi":
-        return NvidiaSmiLogger(interval_ms)
+        return NvidiaSmiLogger(interval_ms, device_index)
     if kind == "tegrastats":
         return TegrastatsLogger(interval_ms)
-    # Prefer the direct NVML API for discrete NVIDIA GPUs.
-    if PynvmlLogger.bindings_available() and shutil.which("nvidia-smi"):
-        return PynvmlLogger(interval_ms, device_index)
+    # Prefer the direct NVML API when it can actually query this device.  Merely
+    # finding the Python package is insufficient on machines with a stale NVML
+    # library; in that case auto mode can still fall back to nvidia-smi.
+    if PynvmlLogger.bindings_available():
+        nvml = probe_nvml(device_index)
+        if nvml.available and nvml.power_supported:
+            return PynvmlLogger(interval_ms, device_index)
     # Auto-detect fallbacks.
     if shutil.which("tegrastats"):
         return TegrastatsLogger(max(interval_ms, 50))
     if shutil.which("nvidia-smi"):
-        return NvidiaSmiLogger(interval_ms)
+        return NvidiaSmiLogger(interval_ms, device_index)
     return None

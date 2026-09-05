@@ -7,23 +7,22 @@ import collections.abc
 import torch
 import torch.nn.functional as F
 
-from .common import (AdapterMetadata, ROOT, normalize, require_dataset,
-                     require_file, sample_frames, validate_logits)
+from .common import (ROOT, AdapterMetadata, checkpoint_path, normalize,
+                     require_dataset, require_file, sample_frames,
+                     validate_logits)
 
 
 class TimeSformerModel(AdapterMetadata):
     MODEL_ZOO = {
-        "B": {"checkpoint": ROOT / "checkpoints" / "timesformer" /
-              "TimeSformer_divST_8x32_224_K400.pyth", "frames": 8, "size": 224,
+        "B": {"checkpoint": checkpoint_path("timesformer", "TimeSformer_divST_8x32_224_K400.pyth"), "frames": 8, "size": 224,
               "accuracy": 78.0, "gflops": 196.0},
-        "HR": {"checkpoint": ROOT / "checkpoints" / "timesformer" /
-               "TimeSformer_divST_16x16_448_K400.pyth", "frames": 16, "size": 448,
+        "HR": {"checkpoint": checkpoint_path("timesformer", "TimeSformer_divST_16x16_448_K400.pyth"), "frames": 16, "size": 448,
                "accuracy": 79.7, "gflops": 1703.0},
     }
+    # LEGACY released classifier, quarantined per Phase 3; inference-only.
     SSV2_MODEL_ZOO = {
         "B": {
-            "checkpoint": ROOT / "checkpoints" / "timesformer" /
-                          "TimeSformer_divST_8_224_SSv2.pyth",
+            "checkpoint": checkpoint_path("legacy_ssv2_released", "TimeSformer_divST_8_224_SSv2.pyth"),
             "frames": 8,
             "size": 224,
             "accuracy": 59.1,

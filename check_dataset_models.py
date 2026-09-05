@@ -35,7 +35,7 @@ class LocalAssetSpec:
 SSV2_ASSETS = {
     "uniformer-b": LocalAssetSpec(
         "UniFormer-B",
-        "checkpoints/uniformer/uniformer_base_sthv2_16_prek400.pth",
+        "checkpoints/legacy_ssv2_released/uniformer_base_sthv2_16_prek400.pth",
         199_061_829,
         (
             "third_party/UniFormer/video_classification/slowfast/models/uniformer.py",
@@ -44,7 +44,7 @@ SSV2_ASSETS = {
     ),
     "uniformer-s": LocalAssetSpec(
         "UniFormer-S",
-        "checkpoints/uniformer/uniformer_small_sthv2_16_prek400.pth",
+        "checkpoints/legacy_ssv2_released/uniformer_small_sthv2_16_prek400.pth",
         85_271_581,
         (
             "third_party/UniFormer/video_classification/slowfast/models/uniformer.py",
@@ -53,7 +53,7 @@ SSV2_ASSETS = {
     ),
     "videoswin-b": LocalAssetSpec(
         "VideoSwin-B",
-        "checkpoints/videoswin/swin_base_patch244_window1677_sthv2.pth",
+        "checkpoints/legacy_ssv2_released/swin_base_patch244_window1677_sthv2.pth",
         473_410_081,
         (
             "third_party/Video-Swin-Transformer/configs/recognition/swin/swin_base_patch244_window1677_sthv2.py",
@@ -62,7 +62,7 @@ SSV2_ASSETS = {
     ),
     "timesformer-b": LocalAssetSpec(
         "TimeSformer-B",
-        "checkpoints/timesformer/TimeSformer_divST_8_224_SSv2.pyth",
+        "checkpoints/legacy_ssv2_released/TimeSformer_divST_8_224_SSv2.pyth",
         971_325_489,
         (
             "third_party/TimeSformer/timesformer/models/vit.py",
@@ -71,7 +71,7 @@ SSV2_ASSETS = {
     ),
     "video-focalnet-b": LocalAssetSpec(
         "Video-FocalNet-B",
-        "checkpoints/focalnet/video-focalnet_base_ssv2.pth",
+        "checkpoints/legacy_ssv2_released/video-focalnet_base_ssv2.pth",
         628_860_159,
         (
             "third_party/Video-FocalNets/classification/videofocalnet.py",
@@ -80,7 +80,7 @@ SSV2_ASSETS = {
     ),
     "videomae-b": LocalAssetSpec(
         "VideoMAE-B",
-        "checkpoints/videomae/videomae_vit_b_ssv2_2400e.pth",
+        "checkpoints/legacy_ssv2_released/videomae_vit_b_ssv2_2400e.pth",
         172_756_423,
         (
             "third_party/VideoMAE/modeling_finetune.py",

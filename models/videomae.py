@@ -1,11 +1,4 @@
-"""VideoMAE classifier adapter with offline-only checkpoint loading.
-
-The ``VideoMAE-ViT-*_1600epoch.pth`` workspace files are pretraining
-encoder/decoder checkpoints and do not contain a K400 classifier.  They are
-never mislabeled as fine-tuned models here.  Put a Transformers export in
-``checkpoints/videomae/base-finetuned-kinetics`` or use an already populated
-Hugging Face cache.
-"""
+"""Strict adapters for official VideoMAE classification checkpoints."""
 import importlib.util
 from pathlib import Path
 import sys
@@ -16,6 +9,7 @@ from .common import (
     AdapterMetadata,
     ModelUnavailableError,
     ROOT,
+    checkpoint_path,
     dataset_class_names,
     normalize,
     require_dataset,
@@ -54,8 +48,8 @@ def _restore_qv_biases(model, source):
         )
 
 
-def _load_official_ssv2_model(checkpoint):
-    """Strict-load the official 174-way VideoMAE-B fine-tuned graph."""
+def _load_official_model(checkpoint, num_classes):
+    """Strict-load an official VideoMAE-B fine-tuned classification graph."""
     source_path = ROOT / "third_party" / "VideoMAE" / "modeling_finetune.py"
     require_file(source_path)
     module_name = "_benchmark_official_videomae_finetune"
@@ -77,7 +71,7 @@ def _load_official_ssv2_model(checkpoint):
             raise
     model = module.vit_base_patch16_224(
         pretrained=False,
-        num_classes=174,
+        num_classes=num_classes,
         all_frames=16,
         tubelet_size=2,
         use_mean_pooling=True,
@@ -92,24 +86,36 @@ def _load_official_ssv2_model(checkpoint):
         raise RuntimeError(
             f"Checkpoint is incompatible with {checkpoint}: {exc}"
         ) from exc
-    if getattr(model.head, "out_features", None) != 174:
-        raise RuntimeError(f"{checkpoint} does not provide a 174-class head")
+    if getattr(model.head, "out_features", None) != num_classes:
+        raise RuntimeError(
+            f"{checkpoint} does not provide a {num_classes}-class head"
+        )
     return model
+
+
+def _load_official_ssv2_model(checkpoint):
+    """Backward-compatible named entry point for the official SSV2 graph."""
+    return _load_official_model(checkpoint, 174)
 
 
 class VideoMAEModel(AdapterMetadata):
     MODEL_ZOO = {
-        "B1600": {"local": ROOT / "checkpoints" / "videomae" / "base-finetuned-kinetics",
-                  "hf_id": "MCG-NJU/videomae-base-finetuned-kinetics",
-                  "frames": 16, "accuracy": 80.9, "gflops": 180.0},
-        "L": {"local": ROOT / "checkpoints" / "videomae" / "large-finetuned-kinetics",
+        "B1600": {
+            "checkpoint": checkpoint_path(
+                "videomae", "videomae_vit_b_k400_1600e_ft.pth"
+            ),
+            "frames": 16,
+            "accuracy": 81.5,
+            "gflops": 180.0,
+        },
+        "L": {"local": checkpoint_path("videomae", "large-finetuned-kinetics"),
               "hf_id": "MCG-NJU/videomae-large-finetuned-kinetics",
               "frames": 16, "accuracy": 84.7, "gflops": 597.0},
     }
+    # LEGACY released classifier, quarantined per Phase 3; inference-only.
     SSV2_MODEL_ZOO = {
         "B1600": {
-            "checkpoint": ROOT / "checkpoints" / "videomae" /
-                          "videomae_vit_b_ssv2_2400e.pth",
+            "checkpoint": checkpoint_path("legacy_ssv2_released", "videomae_vit_b_ssv2_2400e.pth"),
             "frames": 16,
             "accuracy": 70.8,
             "gflops": 180.0,
@@ -131,25 +137,13 @@ class VideoMAEModel(AdapterMetadata):
             checkpoint = require_file(self.info["checkpoint"])
             model = _load_official_ssv2_model(checkpoint)
         else:
-            from transformers import VideoMAEForVideoClassification
-            source = str(
-                self.info["local"]
-                if Path(self.info["local"]).is_dir()
-                else self.info["hf_id"]
-            )
-            try:
-                model = VideoMAEForVideoClassification.from_pretrained(
-                    source, local_files_only=True
+            if self.variant != "B1600":
+                raise ModelUnavailableError(
+                    "Only the exact official VideoMAE-B 1600-epoch K400 "
+                    "classifier is registered for frozen17"
                 )
-            except OSError as exc:
-                raise RuntimeError(
-                    f"Fine-tuned VideoMAE classifier is not available offline. Expected "
-                    f"{self.info['local']} or cached {self.info['hf_id']}. The 1600epoch .pth "
-                    "files are pretraining checkpoints without classification heads."
-                ) from exc
-            _restore_qv_biases(model, source)
-            if model.classifier.out_features != 400:
-                raise RuntimeError(f"{source} does not provide a 400-class head")
+            checkpoint = require_file(self.info["checkpoint"])
+            model = _load_official_model(checkpoint, 400)
         self.device = torch.device(device if not str(device).startswith("cuda") or torch.cuda.is_available() else "cpu")
         self.model = model.eval().to(self.device)
 
@@ -160,7 +154,7 @@ class VideoMAEModel(AdapterMetadata):
         if self.dataset == "ssv2":
             logits = self.model(clip.permute(0, 2, 1, 3, 4).contiguous())
         else:
-            logits = self.model(pixel_values=clip).logits
+            logits = self.model(clip.permute(0, 2, 1, 3, 4).contiguous())
         return validate_logits(
             logits, batch_size=clip.shape[0], classes=self.num_classes
         )
@@ -173,5 +167,4 @@ class VideoMAEModel(AdapterMetadata):
     def class_names(self):
         if self.dataset == "ssv2":
             return dataset_class_names(self.dataset)
-        labels = self.model.config.id2label
-        return [labels[index] for index in range(len(labels))]
+        return dataset_class_names(self.dataset)

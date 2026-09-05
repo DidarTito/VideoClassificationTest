@@ -7,6 +7,7 @@ import torch
 from .common import (
     AdapterMetadata,
     ROOT,
+    checkpoint_path as configured_checkpoint_path,
     load_exact_state_dict,
     normalize,
     require_file,
@@ -41,28 +42,31 @@ def _video_focalnet_class():
 class VideoFocalNetModel(AdapterMetadata):
     MODEL_ZOO = {
         "T": {
-            "checkpoint": ROOT / "checkpoints" / "focalnet" / "video-focalnet_tiny_kinetics400.pth",
+            "checkpoint": configured_checkpoint_path("focalnet", "video-focalnet_tiny_kinetics400.pth"),
             "embed_dim": 96,
             "depths": [2, 2, 6, 2],
             "drop_path_rate": 0.2,
             "accuracy": 79.8,
             "gflops": 63.0,
+            "runtime_params_m": 49.553272,
         },
         "S": {
-            "checkpoint": ROOT / "checkpoints" / "focalnet" / "video-focalnet_small_kinetics400.pth",
+            "checkpoint": configured_checkpoint_path("focalnet", "video-focalnet_small_kinetics400.pth"),
             "embed_dim": 96,
             "depths": [2, 2, 18, 2],
             "drop_path_rate": 0.3,
             "accuracy": 81.4,
             "gflops": 124.0,
+            "runtime_params_m": 88.735168,
         },
         "B": {
-            "checkpoint": ROOT / "checkpoints" / "focalnet" / "video-focalnet_base_kinetics400.pth",
+            "checkpoint": configured_checkpoint_path("focalnet", "video-focalnet_base_kinetics400.pth"),
             "embed_dim": 128,
             "depths": [2, 2, 18, 2],
             "drop_path_rate": 0.5,
             "accuracy": 83.6,
             "gflops": 149.0,
+            "runtime_params_m": 157.389216,
         },
     }
 
@@ -80,7 +84,8 @@ class VideoFocalNetModel(AdapterMetadata):
                     f"Video-FocalNet-{variant} has no SSV2 checkpoint in checkpoints/focalnet"
                 )
             self.info.update({
-                "checkpoint": ROOT / "checkpoints" / "focalnet" / "video-focalnet_base_ssv2.pth",
+                # LEGACY released classifier, quarantined per Phase 3.
+                "checkpoint": configured_checkpoint_path("legacy_ssv2_released", "video-focalnet_base_ssv2.pth"),
                 "accuracy": 71.1,
             })
         checkpoint_path = require_file(self.info["checkpoint"])
@@ -108,12 +113,20 @@ class VideoFocalNetModel(AdapterMetadata):
                 f"{checkpoint_path} must contain the official nested 'model' state dict"
             )
         load_exact_state_dict(model, checkpoint["model"], checkpoint_path)
+        actual_params_m = sum(parameter.numel() for parameter in model.parameters()) / 1e6
+        expected_params_m = float(self.info["runtime_params_m"])
+        if abs(actual_params_m - expected_params_m) / expected_params_m > 0.05:
+            raise RuntimeError(
+                f"Video-FocalNet-{variant} parameter preflight failed: "
+                f"actual={actual_params_m:.6f}M, expected official checkpoint "
+                f"graph={expected_params_m:.6f}M"
+            )
         if getattr(model.head, "out_features", None) != self.num_classes:
             raise RuntimeError(f"{checkpoint_path} does not provide a {self.num_classes}-class head")
 
         self.model = model.eval().to(self.device)
         self.frames = 8
-        self.sampling_rate = 4
+        self.sampling_rate = 8
 
     @torch.inference_mode()
     def __call__(self, clip):
