@@ -32,7 +32,18 @@ def main():
     commit=subprocess.run(["git","rev-parse","HEAD"],cwd=ROOT,text=True,capture_output=True).stdout.strip();(run/"git_commit.txt").write_text(commit+"\n")
     (run/"environment.txt").write_text(f"python={platform.python_version()}\ntorch={torch.__version__}\ncuda={torch.version.cuda}\ndevice={a.device}\n")
     (run/"checkpoint_source.json").write_text(json.dumps({k:spec.get(k) for k in ("k400_checkpoint","checkpoint_sha256","checkpoint_origin","checkpoint_status","source_repo","source_commit")},indent=2))
-    (run/"protocol_status.json").write_text(json.dumps({"protocol_deviation": partial, "final_result": not partial, "status": "NONFINAL_PARTIAL_SSV2_SMOKE" if partial else "FINAL_ELIGIBLE"}, indent=2))
+    final_result = (not partial) and (not a.smoke)
+    if partial:
+        protocol_status = "NONFINAL_PARTIAL_SSV2_SMOKE"
+    elif a.smoke:
+        protocol_status = "NONFINAL_SSV2_SMOKE"
+    else:
+        protocol_status = "FINAL_ELIGIBLE"
+    (run/"protocol_status.json").write_text(json.dumps({
+        "protocol_deviation": partial,
+        "final_result": final_result,
+        "status": protocol_status
+    }, indent=2))
     model,owner=build_trainable(a.model,a.device)
     (run/"checkpoint_metadata.json").write_text(json.dumps({"load_policy":"backend strict load; only declared 400-way classifier replaced","classifier_path":spec["classifier"]["path"],"source_classes":400,"target_classes":174,"missing_backbone_keys":[],"unexpected_backbone_keys":[]},indent=2))
     dtype,scaler=amp_policy(a.device,spec["finetune"]["amp_mode"]);ctx=lambda:autocast(a.device,dtype)
