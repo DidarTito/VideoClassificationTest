@@ -388,12 +388,38 @@ def _total_energy_joules(energy_mj_per_clip, clip_count):
     return energy_mj_per_clip * clip_count / 1_000.0
 
 
+from tqdm.auto import tqdm
+
+
 def _clip_chunks(clips, chunk_size):
     if hasattr(clips, "iter_chunks"):
         yield from clips.iter_chunks(chunk_size)
     else:
         for start in range(0, len(clips), chunk_size):
             yield clips[start : start + chunk_size]
+
+
+def _progress_clip_chunks(clips, chunk_size):
+    """Yield chunks and display completed clip progress.
+
+    Progress is updated only after the caller has completely processed
+    each chunk, keeping tqdm rendering outside the measured inference
+    timing region.
+    """
+    bar = tqdm(
+        total=len(clips),
+        desc="Inference",
+        unit="clip",
+        dynamic_ncols=True,
+        leave=True,
+        mininterval=1.0,
+    )
+    try:
+        for chunk in _clip_chunks(clips, chunk_size):
+            yield chunk
+            bar.update(len(chunk))
+    finally:
+        bar.close()
 
 
 def _model_cuda_device(model):
@@ -443,7 +469,7 @@ def benchmark(
         if cuda_device is not None:
             torch.cuda.synchronize(cuda_device)
 
-        for raw_chunk in _clip_chunks(clips, chunk_size):
+        for raw_chunk in _progress_clip_chunks(clips, chunk_size):
             prepared_chunk = [clip_to_input(clip_u8) for clip_u8 in raw_chunk]
             logger_started = False
             chunk_samples = []
