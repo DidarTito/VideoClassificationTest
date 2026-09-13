@@ -1,5 +1,8 @@
 # Efficient Video Transformer Deployment Benchmark
 
+For the current five-model K400 and final-fine-tuned SSV2 1,000-clip runs,
+see [FIVE_MODEL_RUNBOOK.md](FIVE_MODEL_RUNBOOK.md).
+
 This repository evaluates how to choose an efficient video-classification
 transformer for a particular deployment platform. The same methodology is
 intended to run on consumer GPUs such as an RTX 3050 or RTX 5090 and on edge

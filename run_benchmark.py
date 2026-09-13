@@ -775,9 +775,16 @@ def benchmark_models(
     device_info=None,
     config=None,
     result_callback: Callable[[dict], None] | None = None,
+    final_ssv2_factories: dict | None = None,
+    final_ssv2_checkpoints: dict | None = None,
 ):
     """Benchmark every model independently and persist through a callback."""
     del device_name  # Runtime identity always comes from the detected device.
+    if final_ssv2_factories is not None:
+        if dataset != "ssv2" or final_ssv2_checkpoints is None:
+            raise ValueError("final SSV2 factories require SSV2 and explicit checkpoints")
+        if set(model_keys) - set(final_ssv2_factories):
+            raise ValueError("a final SSV2 model factory is missing")
     if device_info is None:
         device_info = resolve_device(device, precision=precision)
     if config is None:
@@ -815,10 +822,15 @@ def benchmark_models(
         print("=" * 70)
         print(f"{model_key}  ({len(clips)} timed inferences, {config.precision})")
         row = _base_result_row(model_key, device_info, config)
+        final_factory = (final_ssv2_factories or {}).get(model_key)
+        if final_factory is not None:
+            row["Checkpoint"] = str(Path(final_ssv2_checkpoints[model_key]).resolve())
+            row["ModelFrames"] = int(frozen_model_spec(model_key)["input"]["num_frames"])
+            row["FramesUsed"] = row["ModelFrames"]
         model = None
         try:
             spec = REQUESTED_MODEL_SPECS.get(model_key)
-            if spec is not None and not spec.for_dataset(config.dataset).available:
+            if final_factory is None and spec is not None and not spec.for_dataset(config.dataset).available:
                 raise RuntimeError(spec.for_dataset(config.dataset).availability_reason)
             if cuda_index is not None:
                 _wait_for_cooldown(
@@ -830,10 +842,17 @@ def benchmark_models(
                 query_temperature(nvml_index) if nvml_index is not None else float("nan")
             )
 
-            model = MODEL_REGISTRY[model_key](
-                dataset=config.dataset, device=str(torch_device)
-            )
-            if model_key in FROZEN17_MODEL_KEYS and config.num_clips >= 1000:
+            if final_factory is not None:
+                model = final_factory()
+            else:
+                model = MODEL_REGISTRY[model_key](
+                    dataset=config.dataset, device=str(torch_device)
+                )
+            if (
+                model_key in FROZEN17_MODEL_KEYS
+                and config.dataset == "k400"
+                and config.num_clips >= 1000
+            ):
                 validate_frozen_model(
                     model_key,
                     model,
@@ -961,12 +980,15 @@ def benchmark_models(
             # Authoritative registry metadata supplies actual model frames even
             # when an older adapter lacks a public .frames attribute.
             pair = spec.for_dataset(config.dataset) if spec else None
-            if pair and pair.preprocessing:
-                row["ModelFrames"] = pair.preprocessing.frames
-                row["FramesUsed"] = pair.preprocessing.frames
+            if final_factory is not None:
+                row["ModelFrames"] = int(frozen_model_spec(model_key)["input"]["num_frames"])
+                row["FramesUsed"] = row["ModelFrames"]
             elif frozen:
                 row["ModelFrames"] = int(frozen["input"]["num_frames"])
-                row["FramesUsed"] = int(frozen["input"]["num_frames"])
+                row["FramesUsed"] = row["ModelFrames"]
+            elif pair and pair.preprocessing:
+                row["ModelFrames"] = pair.preprocessing.frames
+                row["FramesUsed"] = pair.preprocessing.frames
             _add_legacy_fields(row, measured, metric_accuracy, "measured" if measured is not None else "unavailable")
             print(
                 f"  latency {latency:.1f} +/- {latency_std:.1f} ms | "
@@ -1424,6 +1446,17 @@ def run_preflight(args, device_info, manifest_path):
         )
     ready_count = 0
     for model_key in args.model_keys:
+        if model_key in FROZEN17_MODEL_KEYS and args.dataset == "k400":
+            frozen = frozen_model_spec(model_key)
+            if (
+                frozen.get("checkpoint_status") != "READY_EXACT"
+                or not frozen.get("checkpoint_sha256")
+            ):
+                print(
+                    f"[SKIP] {model_key} - frozen K400 checkpoint is "
+                    f"{frozen.get('checkpoint_status')}"
+                )
+                continue
         spec = REQUESTED_MODEL_SPECS.get(model_key)
         if spec is None:
             try:
@@ -1463,6 +1496,11 @@ def run_preflight(args, device_info, manifest_path):
     print(f"READY: {ready_count} models")
     if ready_count == 0:
         fatal.append("no requested exact model/checkpoint pair is ready")
+    elif args.models and not args.allow_skips and ready_count != len(args.model_keys):
+        fatal.append(
+            f"only {ready_count}/{len(args.model_keys)} requested "
+            "model/checkpoint pairs are ready"
+        )
     if fatal:
         print("\nNOT READY")
         for problem in fatal:

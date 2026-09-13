@@ -229,10 +229,11 @@ models:
     training_backend: uniformer_slowfast
     environment_name: core-modern
     k400_checkpoint: checkpoints/uniformer/uniformer_base_k400_32x4.pth
-    checkpoint_sha256: null
-    checkpoint_origin: https://drive.google.com/file/d/1gHxx8cr1H0CNvngj1kB9ArgcPfJtqjCV/view
-    checkpoint_status: BLOCKED_EXACT_ARTIFACT
-    pretraining: K400 supervised; official 32x4 checkpoint is distinct from the local 16x4/82.0 artifact
+    checkpoint_sha256: b432450566cdc4f50222e4851b5d304bba4444a699cdbb43fa529ceb18ae1f8e
+    checkpoint_origin: https://huggingface.co/Sense-X/uniformer_video/blob/main/uniformer_base_k400_32x4.pth
+    checkpoint_alternate_origin: https://drive.google.com/file/d/1gHxx8cr1H0CNvngj1kB9ArgcPfJtqjCV/view
+    checkpoint_status: READY_EXACT
+    pretraining: K400 supervised; official 32x4 checkpoint hash matches the first-party Sense-X Hugging Face LFS object and is distinct from the local 16x4/82.0 artifact
     k400_classes: 400
     ssv2_classes: 174
     input: {num_frames: 32, sampling_rate: 4, resolution: 224, tensor_layout: BCTHW_pathway, mean: [0.45, 0.45, 0.45], std: [0.225, 0.225, 0.225]}
