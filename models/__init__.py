@@ -129,6 +129,9 @@ def _preprocessing(frames, mean, std, layout, temporal_sampling=None):
 _P16_045_PATHWAY = _preprocessing(
     16, _MEAN_045, _STD_0225, "one-element pathway list containing B,C,T,H,W"
 )
+_P32_045_PATHWAY = _preprocessing(
+    32, _MEAN_045, _STD_0225, "one-element pathway list containing B,C,T,H,W"
+)
 _P32_045_BCTHW = _preprocessing(32, _MEAN_045, _STD_0225, "B,C,T,H,W")
 _P8_045_BCTHW = _preprocessing(8, _MEAN_045, _STD_0225, "B,C,T,H,W")
 _P32_IMAGENET_BCTHW = _preprocessing(
@@ -189,12 +192,12 @@ _REQUESTED_SPECS = (
         "uniformer-b",
         "UniFormer-B",
         _lazy("models.uniformer", "UniFormerModel", "B"),
-        PublishedValues(83.0, 50.3, 259.0),
+        PublishedValues(82.9, 50.3, 259.0),
         _datasets(
             _available(
                 "k400", 400,
-                "checkpoints/uniformer/uniformer_base_k400_16x4.pth",
-                _P16_045_PATHWAY, 82.0, 49.8, 387.0,
+                "checkpoints/uniformer/uniformer_base_k400_32x4.pth",
+                _P32_045_PATHWAY, 82.9, 50.3, 259.0,
             ),
             _available(
                 "ssv2", 174,
@@ -207,12 +210,12 @@ _REQUESTED_SPECS = (
         "uniformer-s",
         "UniFormer-S",
         _lazy("models.uniformer", "UniFormerModel", "S"),
-        PublishedValues(80.8, 22.0, 42.0),
+        PublishedValues(80.8, 21.5, 41.8),
         _datasets(
             _available(
                 "k400", 400,
-                "checkpoints/uniformer/uniformer_small_k400_16x8.pth",
-                _P16_045_PATHWAY, 80.8, 21.4, 167.0,
+                "checkpoints/uniformer/uniformer_small_k400_16x4.pth",
+                _P16_045_PATHWAY, 80.8, 21.5, 41.8,
             ),
             _available(
                 "ssv2", 174,
@@ -431,12 +434,12 @@ _REQUESTED_SPECS = (
         "videomae-b",
         "VideoMAE-B",
         _lazy("models.videomae", "VideoMAEModel", "B1600"),
-        PublishedValues(80.9, 86.2, 180.0),
+        PublishedValues(81.5, 87.0, 180.0),
         _datasets(
             _available(
                 "k400", 400,
-                "checkpoints/videomae/base-finetuned-kinetics/model.safetensors",
-                _P16_IMAGENET_BTCHW, 80.9, 86.2, 180.0,
+                "checkpoints/videomae/videomae_vit_b_k400_1600e_ft.pth",
+                _P16_IMAGENET_BTCHW, 81.5, 87.0, 180.0,
             ),
             _available(
                 "ssv2", 174,

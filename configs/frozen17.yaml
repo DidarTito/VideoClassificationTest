@@ -258,6 +258,8 @@ models:
     input: {num_frames: 16, sampling_rate: 4, resolution: 224, tensor_layout: BTCHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
     classifier: {path: head, source_classes: 400, target_classes: 174}
     stage1: {paper_top1: 81.5, gflops_per_view: 180.0, params_m: 87.0}
+    runtime_actual_params_m: 86.5348
+    runtime_param_source: exact sum of tensors in the strict-loaded official 1600-epoch K400 fine-tuned classifier
     finetune: {config: configs/ssv2/videomae-b.yaml, recipe_origin: controlled_k400_to_ssv2, amp_mode: bf16_if_supported, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
   - key: dualformer-b-in21k
     display_name: DualFormer-B (IN21K)

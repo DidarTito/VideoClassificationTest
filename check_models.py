@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parent
 
@@ -197,6 +199,50 @@ def _base_result(ctx: InspectionContext, spec: RequestedModel) -> ModelResult:
     return result
 
 
+def _frozen_model_spec(ctx: InspectionContext, key: str) -> dict[str, object]:
+    """Read one canonical frozen K400 identity without importing model code."""
+    manifest = ctx.workspace("configs/frozen17.yaml")
+    payload = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    matches = [row for row in payload.get("models", []) if row.get("key") == key]
+    if len(matches) != 1:
+        raise ValueError(f"expected one frozen17 entry for {key!r}, found {len(matches)}")
+    return matches[0]
+
+
+def _add_frozen_k400_checkpoint(
+    result: ModelResult, ctx: InspectionContext, detail: str
+) -> Path | None:
+    """Validate the exact configured path and SHA, with no filename fallback."""
+    try:
+        frozen = _frozen_model_spec(ctx, result.spec.key)
+    except Exception as exc:
+        result.blockers.append(f"Cannot read frozen checkpoint identity: {exc}")
+        return None
+    relative = frozen.get("k400_checkpoint")
+    expected_sha = str(frozen.get("checkpoint_sha256") or "").lower()
+    if frozen.get("checkpoint_status") != "READY_EXACT" or not relative or not expected_sha:
+        result.blockers.append(
+            f"Incomplete READY_EXACT frozen checkpoint identity for {result.spec.key}."
+        )
+        return None
+    checkpoint = ctx.workspace(str(relative))
+    if not checkpoint.is_file():
+        result.blockers.append(f"Missing exact checkpoint: {relative}")
+        return checkpoint
+    actual_sha = _sha256(checkpoint).lower()
+    if actual_sha != expected_sha:
+        _add_files(
+            result, [checkpoint], "checkpoint",
+            f"SHA256 mismatch: {actual_sha} != {expected_sha}", "incompatible",
+        )
+        result.blockers.append(
+            f"{result.spec.name} checkpoint failed its configured SHA256 check."
+        )
+        return checkpoint
+    _add_files(result, [checkpoint], "checkpoint", detail)
+    return checkpoint
+
+
 def _add_files(result: ModelResult, paths: Iterable[Path], kind: str, detail: str,
                compatibility: str = "exact") -> None:
     for path in _unique_paths(paths):
@@ -206,85 +252,69 @@ def _add_files(result: ModelResult, paths: Iterable[Path], kind: str, detail: st
 def _uniformer_s(ctx: InspectionContext, spec: RequestedModel) -> ModelResult:
     result = _base_result(ctx, spec)
     result.notes.append(
-        "The official 16x8 checkpoint is 21.4M parameters and 167 GFLOPs; "
-        "the requested row's 42 GFLOPs does not describe this exact recipe."
+        "The selected official 16x4 recipe consumes 16 model frames at temporal "
+        "sampling rate 4; 41.8 GFLOPs is per view and 167 GFLOPs is four views."
     )
-    checkpoint = ctx.workspace("checkpoints/uniformer/uniformer_small_k400_16x8.pth")
-    incompatible = ctx.workspace("checkpoints/uniformer/uniformer_small_k400_8x8.pth")
+    _add_frozen_k400_checkpoint(
+        result, ctx, "official Kinetics-400 UniFormer-S 16-frame/stride-4 classifier"
+    )
+    alternatives = _existing_files(ctx.root, (
+        "checkpoints/uniformer/uniformer_small_k400_16x8.pth",
+        "checkpoints/uniformer/uniformer_small_k400_8x8.pth",
+    ))
+    _add_files(
+        result, alternatives, "checkpoint",
+        "different temporal sampling recipe; not selected for frozen17", "incompatible",
+    )
     source = ctx.workspace(
         "third_party/UniFormer/video_classification/slowfast/models/uniformer.py"
     )
-    expected_sha = "d5fd7b0c49ee6a5422ef5d0c884d962c742003bfbd900747485eb99fa269d0db"
-    if checkpoint.is_file() and _sha256(checkpoint) == expected_sha:
-        _add_files(result, [checkpoint], "checkpoint", "Kinetics-400 UniFormer-S 16x8")
-    elif checkpoint.is_file():
-        _add_files(
-            result,
-            [checkpoint],
-            "checkpoint",
-            "checksum mismatch/incomplete download",
-            "incompatible",
-        )
-        result.blockers.append("UniFormer-S checkpoint failed its official SHA256 check.")
-    else:
-        result.blockers.append(
-            "Missing the requested 80.8% UniFormer-S Kinetics-400 checkpoint "
-            "(uniformer_small_k400_16x8.pth)."
-        )
-    if incompatible.is_file():
-        _add_files(
-            result,
-            [incompatible],
-            "checkpoint",
-            "8-frame 78.4% recipe; not the requested 16-frame 80.8% recipe",
-            "incompatible",
-        )
+    config = ctx.workspace(
+        "third_party/UniFormer/video_classification/exp/uniformer_s16x4_k400/config.yaml"
+    )
     if source.is_file():
         _add_files(result, [source], "source", "official UniFormer video model")
     else:
         result.blockers.append("Missing official UniFormer video source tree.")
+    if config.is_file():
+        _add_files(result, [config], "configuration", "official 16-frame/stride-4 config")
+    else:
+        result.blockers.append("Missing official UniFormer-S 16x4 config.")
     return result
 
 
 def _uniformer_b(ctx: InspectionContext, spec: RequestedModel) -> ModelResult:
     result = _base_result(ctx, spec)
     result.notes.append(
-        "The official K400 16x4 checkpoint reports 49.8M parameters, 387 GFLOPs, "
-        "and 82.0% top-1, not the requested row's 259 GFLOPs and 83.0%."
+        "The selected frozen17 artifact is the official 32-frame/stride-4 Base "
+        "checkpoint; the 16-frame checkpoint has a different SHA and recipe."
     )
-    directory = ctx.workspace("checkpoints/uniformer")
-    files = _files([directory])
-    exact_candidates = _matches(files, ["uniformer_base_k400_*.pth"])
-    expected_sha = "a36e08ecff0a2b11020d6e88046353f80fdeb10b40fe167f2fbc0c1d976fb873"
-    exact = [path for path in exact_candidates if _sha256(path) == expected_sha]
-    corrupt = [path for path in exact_candidates if path not in exact]
-    incompatible = _matches(files, ["uniformer_base_sthv2_*.pth"])
-    _add_files(result, exact, "checkpoint", "400-way Kinetics UniFormer-B")
-    _add_files(result, corrupt, "checkpoint", "checksum mismatch/incomplete download", "incompatible")
+    _add_frozen_k400_checkpoint(
+        result, ctx, "official Kinetics-400 UniFormer-B 32-frame/stride-4 classifier"
+    )
+    alternatives = _existing_files(ctx.root, (
+        "checkpoints/uniformer/uniformer_base_k400_16x4.pth",
+        "checkpoints/legacy_ssv2_released/uniformer_base_sthv2_16_prek400.pth",
+        "checkpoints/uniformer/uniformer_base_sthv2_32_prek400.pth",
+    ))
     _add_files(
-        result,
-        incompatible,
-        "checkpoint",
-        "Something-Something-v2 174-way checkpoint; not valid for Kinetics-400",
-        "incompatible",
+        result, alternatives, "checkpoint",
+        "different frame recipe or dataset head; not selected for frozen17", "incompatible",
     )
     source = ctx.workspace(
         "third_party/UniFormer/video_classification/slowfast/models/uniformer.py"
+    )
+    config = ctx.workspace(
+        "third_party/UniFormer/video_classification/exp/uniformer_b32x4_k400/config.yaml"
     )
     if source.is_file():
         _add_files(result, [source], "source", "official UniFormer video model")
     else:
         result.blockers.append("Missing official UniFormer video source tree.")
-    if not exact:
-        if corrupt:
-            result.blockers.append("UniFormer-B checkpoint failed its official SHA256 check.")
-        elif incompatible:
-            result.blockers.append(
-                "Only a 174-way Something-Something-v2 UniFormer-B checkpoint is present; "
-                "it cannot substitute for the requested Kinetics-400 model."
-            )
-        else:
-            result.blockers.append("Missing a 400-way Kinetics-400 UniFormer-B checkpoint.")
+    if config.is_file():
+        _add_files(result, [config], "configuration", "official 32-frame/stride-4 config")
+    else:
+        result.blockers.append("Missing official UniFormer-B 32x4 config.")
     return result
 
 
@@ -617,26 +647,28 @@ def _simple_local(relative_checkpoint: str, relative_source: str | None = None):
 
 def _videomae_b(ctx: InspectionContext, spec: RequestedModel) -> ModelResult:
     result = _base_result(ctx, spec)
-    local = ctx.workspace("checkpoints/videomae/base-finetuned-kinetics/model.safetensors")
-    cache_root = Path.home() / ".cache" / "huggingface" / "hub" / "models--MCG-NJU--videomae-base-finetuned-kinetics" / "snapshots"
-    cached = list(cache_root.glob("*/model.safetensors")) if cache_root.is_dir() else []
-    candidates = ([local] if local.is_file() else []) + cached
-    _add_files(result, candidates, "checkpoint", "fine-tuned offline K400 classifier")
+    _add_frozen_k400_checkpoint(
+        result, ctx, "official VideoMAE-B 1600-epoch K400 fine-tuned classifier"
+    )
     pretraining = ctx.workspace("checkpoints/videomae/VideoMAE-ViT-B_16x5x3_1600epoch.pth")
     if pretraining.is_file():
         _add_files(result, [pretraining], "checkpoint",
                    "pretraining encoder/decoder; no K400 classification head", "incompatible")
-    if not candidates:
-        result.blockers.append(
-            "Missing an offline fine-tuned VideoMAE-B K400 Transformers checkpoint; "
-            "the 1600epoch .pth file is pretraining-only."
-        )
+    source = ctx.workspace("third_party/VideoMAE/modeling_finetune.py")
+    if source.is_file():
+        _add_files(result, [source], "source", "official VideoMAE fine-tuning graph")
+    else:
+        result.blockers.append("Missing official VideoMAE fine-tuning source.")
+    result.notes.append(
+        "The configured .pth has a module-wrapped 400-way head and loads strictly "
+        "into the vendored official graph; no Transformers conversion is required."
+    )
     return result
 
 
 REQUESTED_MODELS: tuple[RequestedModel, ...] = (
-    RequestedModel("uniformer-b", "UniFormer-B", 50.3, 259, 83.0, _uniformer_b),
-    RequestedModel("uniformer-s", "UniFormer-S", 22.0, 42, 80.8, _uniformer_s),
+    RequestedModel("uniformer-b", "UniFormer-B", 50.3, 259, 82.9, _uniformer_b),
+    RequestedModel("uniformer-s", "UniFormer-S", 21.5, 41.8, 80.8, _uniformer_s),
     RequestedModel("mvit-b-24-32x3", "MViT-B-24, 32x3", 52.9, 236, 81.2, _mvit_b24),
     RequestedModel("mvit-v1-b", "MViT-B, 32x3", 36.6, 170, 80.2, _mvit_b32),
     RequestedModel("videoswin-t", "VideoSwin-T", 28.2, 88, 78.8,
@@ -653,7 +685,7 @@ REQUESTED_MODELS: tuple[RequestedModel, ...] = (
     RequestedModel("video-focalnet-b", "Video-FocalNet-B", 88.0, 149, 83.6, _focalnet_b),
     RequestedModel("dualformer-t", "DualFormer-T", 21.8, 240, 79.5, _dualformer_t),
     RequestedModel("omnivore-b", "Omnivore-B (IN21K)", 88.0, 282, 84.0, _omnivore_b),
-    RequestedModel("videomae-b", "VideoMAE-B", 86.2, 180, 80.9,
+    RequestedModel("videomae-b", "VideoMAE-B", 87.0, 180, 81.5,
                    _videomae_b),
     RequestedModel("svt-b", "SVT-B", 86.0, 180, 78.1, _svt_b),
     RequestedModel("vtn-b", "VTN-B", 114.0, 218, 78.6, _vtn_b),

@@ -71,7 +71,10 @@ class RequestedModelMetadataTests(unittest.TestCase):
     def test_checkpoint_paths_and_temporal_recipes_are_exact(self):
         expected = {
             ("uniformer-s", "k400"): (
-                "checkpoints/uniformer/uniformer_small_k400_16x8.pth", 16
+                "checkpoints/uniformer/uniformer_small_k400_16x4.pth", 16
+            ),
+            ("uniformer-b", "k400"): (
+                "checkpoints/uniformer/uniformer_base_k400_32x4.pth", 32
             ),
             ("mvit-v1-b", "k400"): (
                 "checkpoints/mvit/MVIT_B_32x3_f294077834.pyth", 32
@@ -80,7 +83,7 @@ class RequestedModelMetadataTests(unittest.TestCase):
                 "checkpoints/timesformer/TimeSformer_divST_8x32_224_K400.pyth", 8
             ),
             ("videomae-b", "k400"): (
-                "checkpoints/videomae/base-finetuned-kinetics/model.safetensors", 16
+                "checkpoints/videomae/videomae_vit_b_k400_1600e_ft.pth", 16
             ),
             ("videoswin-b", "ssv2"): (
                 "checkpoints/legacy_ssv2_released/swin_base_patch244_window1677_sthv2.pth", 32
@@ -107,12 +110,12 @@ class RequestedModelMetadataTests(unittest.TestCase):
 
     def test_screening_and_exact_checkpoint_publications_stay_separate(self):
         uniformer_b = REQUESTED_MODEL_SPECS["uniformer-b"]
-        self.assertEqual(uniformer_b.screening.top1_percent, 83.0)
+        self.assertEqual(uniformer_b.screening.top1_percent, 82.9)
         self.assertEqual(
-            uniformer_b.for_dataset("k400").published.top1_percent, 82.0
+            uniformer_b.for_dataset("k400").published.top1_percent, 82.9
         )
         self.assertEqual(uniformer_b.screening.gflops, 259.0)
-        self.assertEqual(uniformer_b.for_dataset("k400").published.gflops, 387.0)
+        self.assertEqual(uniformer_b.for_dataset("k400").published.gflops, 259.0)
 
     def test_dataset_aliases_resolve_without_changing_identity(self):
         spec = REQUESTED_MODEL_SPECS["videomae-b"]
