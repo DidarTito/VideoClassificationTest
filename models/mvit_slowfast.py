@@ -25,7 +25,7 @@ import torch
 import torch.nn.functional as F
 
 from .kinetics_labels import kinetics400_classes
-from .common import checkpoint_path, require_dataset
+from .common import checkpoint_path, require_dataset, dataset_num_classes, dataset_class_names
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -217,14 +217,14 @@ class MViTSlowFastModel:
         clip = clip.to(self.device, non_blocking=self.device.type == "cuda")
 
         output = self.model([clip]) if self._native_slowfast else self.model(clip)
-        if not isinstance(output, torch.Tensor) or output.ndim != 2 or output.shape[1] != 400:
+        if not isinstance(output, torch.Tensor) or output.ndim != 2 or output.shape[1] != self.num_classes:
             shape = tuple(output.shape) if isinstance(output, torch.Tensor) else type(output).__name__
-            raise RuntimeError(f"MViT must return (B, 400); received {shape}")
+            raise RuntimeError(f"MViT must return (B, {self.num_classes}); received {shape}")
         return output
 
     @property
     def class_names(self) -> list[str]:
-        return list(self._class_names)
+        return dataset_class_names("ssv2") if self.dataset == "ssv2" else list(self._class_names)
 
     @property
     def name(self) -> str:
@@ -244,7 +244,7 @@ class MViTSlowFastModel:
 
     @property
     def num_classes(self) -> int:
-        return 400
+        return dataset_num_classes(self.dataset)
 
 
 class MViT_B_32x3(MViTSlowFastModel):

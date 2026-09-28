@@ -47,7 +47,7 @@ from models import (
     REQUESTED_MODEL_SPECS,
 )
 from models.common import set_checkpoint_root, set_dataset_root
-from training.frozen_preflight import validate_frozen_model
+from training.frozen_preflight import validate_frozen_model, sha256_file
 from training.registry import model_spec as frozen_model_spec
 from power import make_power_logger, probe_nvml
 from utils.device import (
@@ -89,6 +89,11 @@ DEFAULT_RUN_ORDER = (
 )
 
 CANONICAL_RESULT_COLUMNS = (
+    "CheckpointProtocol",
+    "CheckpointSHA256",
+    "AccuracyValid",
+    "Top5",
+    "DecodedFrames",
     "Device",
     "DeviceName",
     "DeviceIndex",
@@ -444,6 +449,7 @@ def benchmark(
     warmup=DEFAULT_WARMUP,
     chunk_size=16,
     precision=DEFAULT_PRECISION,
+    top5_predictions=None,
 ):
     """Run the unchanged per-clip inference timing scope.
 
@@ -501,6 +507,8 @@ def benchmark(
                     times.append((time.perf_counter() - start) * 1000.0)
                     out = _validate_logits(out, getattr(model, "num_classes", 400))
                     preds.append(int(out.argmax(-1).item()))
+                    if top5_predictions is not None:
+                        top5_predictions.append(out.topk(5, dim=-1).indices[0].tolist())
             except BaseException as exc:
                 inference_error = exc
                 raise
@@ -584,19 +592,36 @@ def _checkpoint_for_pair(model_key, dataset, checkpoint_dir):
     return str(ROOT / relative)
 
 
-def _base_result_row(model_key, device_info, config):
+def _effective_checkpoint_dataset(model_key, config):
+    """K400 weights are used on SSV2 when no exact 174-class pair exists."""
+    if config.mode == "device-only":
+        return "k400"
     spec = REQUESTED_MODEL_SPECS.get(model_key)
-    pair = spec.for_dataset(config.dataset) if spec else None
+    if spec is not None:
+        if spec.for_dataset(config.dataset).available:
+            return config.dataset
+        if config.dataset == "ssv2" and spec.for_dataset("k400").available:
+            return "k400"
+        return config.dataset
+    if model_key in FROZEN17_MODEL_KEYS and config.dataset == "ssv2":
+        return "k400"
+    return config.dataset
+
+
+def _base_result_row(model_key, device_info, config):
+    checkpoint_dataset = _effective_checkpoint_dataset(model_key, config)
+    spec = REQUESTED_MODEL_SPECS.get(model_key)
+    pair = spec.for_dataset(checkpoint_dataset) if spec else None
     model_frames = (
         int(frozen_model_spec(model_key)["input"]["num_frames"])
-        if model_key in FROZEN17_MODEL_KEYS and config.dataset == "k400"
+        if model_key in FROZEN17_MODEL_KEYS and checkpoint_dataset == "k400"
         else (
             pair.preprocessing.frames
             if pair is not None and pair.preprocessing is not None
             else config.decoded_frames
         )
     )
-    checkpoint = _checkpoint_for_pair(model_key, config.dataset, config.checkpoint_dir)
+    checkpoint = _checkpoint_for_pair(model_key, checkpoint_dataset, config.checkpoint_dir)
     manifest_text = str(config.manifest) if config.manifest else ""
     manifest_hash = (
         manifest_sha256(config.manifest)
@@ -605,11 +630,16 @@ def _base_result_row(model_key, device_info, config):
     )
     frozen = (
         frozen_model_spec(model_key)
-        if model_key in FROZEN17_MODEL_KEYS and config.dataset == "k400"
+        if model_key in FROZEN17_MODEL_KEYS and checkpoint_dataset == "k400"
         else None
     )
     frozen_stage1 = frozen["stage1"] if frozen else None
     row = {
+        "CheckpointProtocol": "K400_ON_SSV2_INPUT" if config.mode == "device-only" else config.dataset.upper(),
+        "CheckpointSHA256": "",
+        "AccuracyValid": config.mode != "device-only",
+        "Top5": float("nan"),
+        "DecodedFrames": config.decoded_frames,
         **device_info.as_dict(),
         "Dataset": config.dataset,
         "DatasetRoot": str(config.dataset_root.resolve()),
@@ -617,7 +647,7 @@ def _base_result_row(model_key, device_info, config):
         "ModelKey": model_key,
         "Model": (
             frozen_model_spec(model_key)["display_name"]
-            if model_key in FROZEN17_MODEL_KEYS and config.dataset == "k400"
+            if model_key in FROZEN17_MODEL_KEYS and checkpoint_dataset == "k400"
             else (spec.display_name if spec else model_key)
         ),
         "Checkpoint": checkpoint,
@@ -667,7 +697,12 @@ def _base_result_row(model_key, device_info, config):
             (pair.published.params_m if pair and pair.published else float("nan"))
         ),
         "CheckpointPublishedGFLOPs": (
-            frozen.get("checkpoint_published", frozen_stage1)["gflops_per_view"] if frozen else
+            (
+                frozen.get("checkpoint_published", frozen_stage1).get(
+                    "gflops_per_view",
+                    frozen.get("checkpoint_published", frozen_stage1).get("gflops"),
+                )
+            ) if frozen else
             (pair.published.gflops if pair and pair.published else float("nan"))
         ),
         "PublishedTop1": (
@@ -716,7 +751,7 @@ def _add_legacy_fields(row, measured, metric_accuracy, accuracy_source):
             "MetricAccuracy(%)": metric_accuracy,
             "MetricAccuracySource": accuracy_source,
             "Params(M)": row["ParamsM"],
-            "NetScore": _metric_or_nan(
+            "NetScore": float("nan") if row.get("RunMode") == "device-only" else _metric_or_nan(
                 netscore, row["PublishedTop1"], row["ParamsM"], row["GFLOPs"]
             ),
             "NS-E(1/8)": row["NS-E"],
@@ -756,6 +791,26 @@ def _wait_for_cooldown(device_index, threshold, timeout):
             f"({remaining:.0f}s remaining)"
         )
         time.sleep(min(5.0, remaining))
+
+
+def _profile_device_gflops(model, raw_clip):
+    """Trace the loaded inference graph outside timing (fvcore: one MAC = one FLOP)."""
+    from fvcore.nn import FlopCountAnalysis
+
+    class AdapterGraph(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.graph = model.model
+
+        def forward(self, clip):
+            return model(clip)
+
+    with torch.inference_mode():
+        analysis = FlopCountAnalysis(AdapterGraph().eval(), (clip_to_input(raw_clip),))
+        analysis.unsupported_ops_warnings(False).uncalled_modules_warnings(False)
+        total = analysis.total() / 1e9
+        unsupported = dict(analysis.unsupported_ops())
+    return total, "fvcore runtime trace; 1 MAC = 1 FLOP; unsupported=" + str(unsupported)
 
 
 def benchmark_models(
@@ -829,8 +884,17 @@ def benchmark_models(
             row["FramesUsed"] = row["ModelFrames"]
         model = None
         try:
+            checkpoint_dataset = _effective_checkpoint_dataset(model_key, config)
+            verification = config.mode == "accuracy-verification"
+            if verification:
+                from scripts.ssv2_accuracy_evidence import verify_before_load
+                verify_before_load(model_key, row, config)
             spec = REQUESTED_MODEL_SPECS.get(model_key)
-            if final_factory is None and spec is not None and not spec.for_dataset(config.dataset).available:
+            if (
+                final_factory is None
+                and spec is not None
+                and not spec.for_dataset(checkpoint_dataset).available
+            ):
                 raise RuntimeError(spec.for_dataset(config.dataset).availability_reason)
             if cuda_index is not None:
                 _wait_for_cooldown(
@@ -846,11 +910,19 @@ def benchmark_models(
                 model = final_factory()
             else:
                 model = MODEL_REGISTRY[model_key](
-                    dataset=config.dataset, device=str(torch_device)
+                    dataset=checkpoint_dataset, device=str(torch_device)
                 )
+            if verification:
+                pair = spec.for_dataset("ssv2")
+                actual_frames = getattr(model, "frames", getattr(model, "info", {}).get("frames"))
+                if model.num_classes != 174 or int(actual_frames or -1) != pair.preprocessing.frames:
+                    raise RuntimeError(f"SSV2 class/frame mismatch: {model.num_classes}/{actual_frames}")
+                with torch.inference_mode():
+                    _validate_logits(model(clip_to_input(clips[0])), 174)
+                row["ClassifierClasses"] = 174
             if (
                 model_key in FROZEN17_MODEL_KEYS
-                and config.dataset == "k400"
+                and checkpoint_dataset == "k400"
                 and config.num_clips >= 1000
             ):
                 validate_frozen_model(
@@ -861,7 +933,9 @@ def benchmark_models(
                     manifest=config.manifest,
                     num_clips=config.num_clips,
                     seed=config.seed,
+                    device_only=config.mode == "device-only",
                 )
+                row["CheckpointSHA256"] = sha256_file(str(Path(row["Checkpoint"]).resolve()))
                 # A wrong output graph fails before power logging or any timed
                 # 1000-clip loop. Adapter constructors have already performed
                 # their strict (non-head included) checkpoint load.
@@ -870,6 +944,21 @@ def benchmark_models(
                     config.precision, "cuda" if cuda_index is not None else "cpu"
                 ):
                     _validate_logits(model(preflight_clip), 400)
+            profiled_gflops = None
+            if config.mode in {"device-only", "accuracy-verification"} or (
+                config.dataset == "ssv2" and checkpoint_dataset == "k400"
+            ):
+                try:
+                    profiled_gflops, row["GFLOPsSource"] = _profile_device_gflops(model, clips[0])
+                    print(f"  GFLOPs/view: {profiled_gflops:.3f}; {row['GFLOPsSource']}")
+                except Exception as exc:
+                    profiled_gflops = float("nan")
+                    row["GFLOPsSource"] = f"runtime profile unavailable: {type(exc).__name__}: {exc}"
+                    print(f"  {row['GFLOPsSource']}")
+                if cuda_index is not None:
+                    torch.cuda.synchronize(torch_device)
+                    torch.cuda.empty_cache()
+                    torch.cuda.reset_peak_memory_stats(torch_device)
             power_logger = (
                 make_power_logger(
                     power_kind,
@@ -884,21 +973,35 @@ def benchmark_models(
                     "  WARNING: no GPU power backend is available; power, energy, "
                     "NS-E, and NS# will be unavailable"
                 )
+            top5_predictions = []
             latency, latency_std, mean_power, samples, preds = benchmark(
                 model,
                 clips,
                 power_logger,
                 warmup=warmup,
                 precision=precision,
+                top5_predictions=top5_predictions,
             )
-            measured = measured_accuracy(model, preds, labels)
+            measured = measured_accuracy(model, preds, labels) if labels else None
+            if labels and len(labels) == len(preds) and all(isinstance(y, int) for y in labels):
+                row["Top5"] = 100.0 * sum(y in p for y, p in zip(labels, top5_predictions)) / len(labels)
+                row["MeasuredTop5"] = row["Top5"]
+                row["Top1Correct"] = int(sum(p == y for p, y in zip(preds, labels)))
+                row["Top5Correct"] = int(sum(y in p for y, p in zip(labels, top5_predictions)))
+            row["AccuracyValid"] = (
+                config.mode != "device-only"
+                and measured is not None
+                and int(getattr(model, "num_classes", 0))
+                == {"k400": 400, "ssv2": 174}[config.dataset]
+            )
+            row["ClassifierClasses"] = int(getattr(model, "num_classes", 0) or 0)
             frozen = (
                 frozen_model_spec(model_key)
-                if model_key in FROZEN17_MODEL_KEYS and config.dataset == "k400"
+                if model_key in FROZEN17_MODEL_KEYS and checkpoint_dataset == "k400"
                 else None
             )
             published = (
-                float(frozen["stage1"]["paper_top1"])
+                float(frozen.get("checkpoint_published", frozen["stage1"])["paper_top1"])
                 if frozen else float(model.accuracy)
             )
             params = int(model.parameters)
@@ -907,6 +1010,10 @@ def benchmark_models(
                 float(frozen["stage1"]["gflops_per_view"])
                 if frozen else float(model.gflops)
             )
+            if config.mode in {"device-only", "accuracy-verification"} or (
+                config.dataset == "ssv2" and checkpoint_dataset == "k400"
+            ):
+                gflops = profiled_gflops
             total_time = latency * len(clips) / 1000.0
             peak_vram = (
                 torch.cuda.max_memory_allocated(torch_device) / 1024.0 / 1024.0
@@ -979,7 +1086,7 @@ def benchmark_models(
             )
             # Authoritative registry metadata supplies actual model frames even
             # when an older adapter lacks a public .frames attribute.
-            pair = spec.for_dataset(config.dataset) if spec else None
+            pair = spec.for_dataset(checkpoint_dataset) if spec else None
             if final_factory is not None:
                 row["ModelFrames"] = int(frozen_model_spec(model_key)["input"]["num_frames"])
                 row["FramesUsed"] = row["ModelFrames"]
@@ -1075,6 +1182,8 @@ def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device", default="auto", help="auto, cuda, cuda:N, or cpu")
     parser.add_argument("--dataset", default="k400", choices=("k400", "ssv2"))
+    parser.add_argument("--mode", choices=("classification", "device-only", "accuracy-verification"), default="classification",
+                        help="device-only uses exact frozen K400 heads on fixed SSV2 inputs without accuracy scoring")
     parser.add_argument(
         "--num-clips", "--max-clips", dest="num_clips",
         help="clip count, or 'all' for every readable dataset video",
@@ -1149,7 +1258,14 @@ def parse_args(argv=None):
         parser.error("--power-sample-ms must be positive")
     if args.repeats <= 0 or args.runs <= 0:
         parser.error("--repeats and --runs must be positive")
-    if args.dataset == "ssv2" and not args.video and args.annotations is None:
+    if args.mode == "device-only":
+        if args.dataset != "ssv2" or args.video or not args.manifest:
+            parser.error("--mode device-only requires --dataset ssv2 and an explicit fixed --manifest")
+        if args.preflight:
+            parser.error("device-only validates its K400 checkpoint and SSV2 manifest before timing; omit --preflight")
+    if args.mode == "accuracy-verification" and (args.dataset != "ssv2" or not args.manifest or args.preflight):
+        parser.error("accuracy-verification requires --dataset ssv2, an explicit --manifest, and actual inference")
+    if args.mode != "device-only" and args.dataset == "ssv2" and not args.video and args.annotations is None:
         parser.error("--annotations is required for split-safe SSV2 directory sampling")
     if args.device_name:
         print("WARNING: --device-name is ignored; hardware identity is detected at runtime.")
@@ -1594,13 +1710,13 @@ def _load_dataset(args, manifest_path):
         )
         manifest_path = destination
         print(f"Created stable dataset manifest: {destination}")
-    labels = load_ground_truth(paths, args.dataset, args.annotations)
+    labels = None if args.mode == "device-only" else load_ground_truth(paths, args.dataset, args.annotations)
     if args.all_clips:
         # The resolved full-dataset size becomes the experiment's clip count.
         args.num_clips = len(clips)
     if args.repeats > 1:
         clips = clips * args.repeats
-        labels = labels * args.repeats
+        labels = labels * args.repeats if labels is not None else None
     return clips, labels, manifest_path
 
 
@@ -1649,7 +1765,7 @@ def main(argv=None):
     set_checkpoint_root(args.checkpoint_dir)
     set_dataset_root(args.dataset, args.dataset_root)
 
-    mode = "smoke" if args.smoke_test else "quick" if args.quick else "full"
+    mode = args.mode if args.mode in {"device-only", "accuracy-verification"} else "smoke" if args.smoke_test else "quick" if args.quick else "full"
     manifest_path = _find_or_promote_manifest(args)
     if args.preflight:
         return run_preflight(args, device_info, manifest_path)
@@ -1691,6 +1807,12 @@ def main(argv=None):
         if key in completed:
             print(f"[RESUME] skipping successful model: {key}")
     if remaining:
+        def persist_result(row):
+            store.upsert(row)
+            if mode == "accuracy-verification":
+                from scripts.ssv2_accuracy_evidence import write_sidecar
+                write_sidecar(row, output_csv.parent)
+
         benchmark_models(
             remaining,
             clips,
@@ -1705,13 +1827,14 @@ def main(argv=None):
             power_sample_ms=args.power_sample_ms,
             device_info=device_info,
             config=config,
-            result_callback=store.upsert,
+            result_callback=persist_result,
         )
     else:
         print("All requested models already completed successfully.")
 
     frame = store.frame()
-    _write_rankings(frame, output_csv.parent)
+    if mode != "device-only":
+        _write_rankings(frame, output_csv.parent)
     print_runtime_estimate(frame, target_clips=1000)
     print(f"Saved: {output_csv}")
     failures = frame[

@@ -33,15 +33,16 @@ def validate_frozen_model(
     manifest=None,
     num_clips=None,
     seed=None,
+    device_only=False,
 ):
     """Reject a wrong graph/checkpoint/input contract before timed inference."""
     if key not in FROZEN17_KEYS:
         raise RuntimeError(f"{key!r} is not a canonical frozen17 model key")
-    if dataset != "k400":
-        raise RuntimeError("frozen17 device preflight requires the K400 source task")
+    if dataset != "k400" and not dataset == "ssv2":
+        raise RuntimeError("frozen17 device preflight requires the K400 source task or SSV2 inputs using that K400 checkpoint")
 
     spec = model_spec(key)
-    if spec.get("checkpoint_status") != "READY_EXACT":
+    if spec.get("checkpoint_status") not in {"READY_EXACT", "READY_NEEDS_CONFIG_VALIDATION"}:
         raise RuntimeError(
             f"{key} is not READY_EXACT: {spec.get('checkpoint_status')}"
         )

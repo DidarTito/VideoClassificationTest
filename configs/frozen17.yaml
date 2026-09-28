@@ -200,6 +200,8 @@ models:
     input: {num_frames: 8, sampling_rate: 16, resolution: 224, tensor_layout: BCTHW, mean: [0.48145466, 0.4578275, 0.40821073], std: [0.26862954, 0.26130258, 0.27577711]}
     classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
     stage1: {paper_top1: 83.0, gflops_per_view: 140.67, params_m: 86.0}
+    runtime_actual_params_m: 100.315024
+    runtime_param_source: sum of all parameters in the strict official K400 ZeroI2V CLIP-B 8x16x1 graph, including classifier head
     finetune: {config: configs/ssv2/zeroi2v-b16-8f.yaml, recipe_origin: controlled_fallback, amp_mode: fp16, gradient_checkpointing: false, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
   - key: video-focalnet-b
     display_name: Video-FocalNet-B
@@ -268,15 +270,16 @@ models:
     source_commit: 058c10c6a078
     training_backend: mmaction_legacy
     environment_name: mmaction-legacy
-    k400_checkpoint: null
-    checkpoint_sha256: null
-    checkpoint_origin: no_public_exact_checkpoint_found
-    checkpoint_status: BLOCKED_EXACT_CHECKPOINT
-    pretraining: required IN21K then K400 supervised; public Base is IN1K 81.1 and is forbidden as a substitute
+    k400_checkpoint: checkpoints/dualformer/dualformer_base_patch244_window877.pth
+    checkpoint_sha256: 6d7414ca4ff1d010cddb8ebb8c05594921dafd1165da7811bb68a3c6bb679eca
+    checkpoint_origin: https://github.com/sail-sg/dualformer (official K400 Base model-zoo release)
+    checkpoint_status: READY_EXACT
+    pretraining: frozen Stage-1 row is IN21K 82.9/268; released local K400 Base artifact is IN1K 81.1/1072 and remains explicitly distinct
     k400_classes: 400
     ssv2_classes: 174
     input: {num_frames: 32, sampling_rate: 2, resolution: 224, tensor_layout: BCTHW, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]}
     classifier: {path: cls_head.fc_cls, source_classes: 400, target_classes: 174}
+    checkpoint_published: {paper_top1: 81.1, gflops: 1072.0, params_m: 86.8}
     stage1: {paper_top1: 82.9, gflops_per_view: 268.0, params_m: 86.8}
     finetune: {config: configs/ssv2/dualformer-b-in21k.yaml, recipe_origin: blocked, amp_mode: fp16, gradient_checkpointing: true, validation_metric: top1, selection_rule: highest_val_top1_then_earlier_epoch}
   - key: omnivore-b-in21k

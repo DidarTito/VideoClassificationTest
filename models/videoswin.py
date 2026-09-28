@@ -145,6 +145,7 @@ class VideoSwinModel(AdapterMetadata):
         if not isinstance(state, dict):
             raise RuntimeError(f"Unexpected Video Swin checkpoint structure: {checkpoint_path}")
         model.load_state_dict(state, strict=True)
+        self.info["checkpoint"] = str(checkpoint_path.resolve())
         self.model = model.eval().to(self.device)
         self.frames = 32
 

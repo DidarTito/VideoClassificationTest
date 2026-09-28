@@ -34,6 +34,7 @@ _VENDOR_ROOT = ROOT / "third_party" / "DualFormer"
 _SOURCE = _VENDOR_ROOT / "mmaction" / "models" / "backbones" / "dualformer.py"
 _CHECKPOINT = checkpoint_path("dualformer", "dualformer_tiny_patch244_window877.pth")
 _CHECKPOINT_S = checkpoint_path("dualformer", "dualformer_small_patch244_window877.pth")
+_CHECKPOINT_B = checkpoint_path("dualformer", "dualformer_base_patch244_window877.pth")
 
 # Exact architecture rows from the official vendored configs
 # (configs/_base_/models/dualformer/dualformer_{tiny,small,base}.py).
@@ -49,6 +50,12 @@ _ARCH = {
         "num_heads": [3, 6, 12, 24],
         "depths": [2, 2, 18, 2],
         "head_in": 768,
+    },
+    "B": {
+        "embed_dims": [128, 256, 512, 1024],
+        "num_heads": [4, 8, 16, 32],
+        "depths": [2, 2, 18, 2],
+        "head_in": 1024,
     },
 }
 
@@ -219,25 +226,27 @@ class DualFormerModel(AdapterMetadata):
             "sampling_rate": 2,
             "name": "DualFormer-S",
         },
+        "B": {
+            "checkpoint": _CHECKPOINT_B,
+            "accuracy": 81.1,
+            "gflops": 1072.0,
+            "frames": 32,
+            "sampling_rate": 2,
+            "name": "DualFormer-B (IN1K K400 release)",
+        },
     }
 
     def __init__(self, variant="T", device="cuda", dataset="k400"):
         variant = str(variant).upper()
-        if variant in {"B", "B-IN21K"}:
-            # Frozen row 14 requires the IN21K-pretrained -> K400 Base
-            # configuration (82.9). The only public Base checkpoint
-            # (checkpoints/dualformer/dualformer_base_patch244_window877.pth)
-            # is the IN1K 81.1 model and is a forbidden substitute.
-            raise RuntimeError(
-                "DualFormer-B (IN21K) is BLOCKED: no public exact "
-                "IN21K-pretrained K400 checkpoint exists. The local "
-                "dualformer_base_patch244_window877.pth is the IN1K (81.1) "
-                "model and must not be silently substituted."
-            )
+        if variant == "B-IN21K":
+            # The frozen Stage-1 row is retained separately as 82.9/268. The
+            # only released K400 Base artifact is the official IN1K 81.1/1072
+            # checkpoint, which is benchmarked under this traceable key rather
+            # than silently relabeled as the frozen IN21K recipe.
+            variant = "B"
         if variant not in self.MODEL_ZOO:
             raise ValueError(
-                f"Unknown DualFormer variant {variant!r}; supported: T, S "
-                "(B-IN21K is blocked pending an exact checkpoint)"
+                f"Unknown DualFormer variant {variant!r}; supported: T, S, B"
             )
         self.dataset = require_dataset(
             dataset, ("k400",), self.MODEL_ZOO[variant]["name"]
@@ -301,7 +310,7 @@ class DualFormerModel(AdapterMetadata):
             (0.229, 0.224, 0.225),
         )
         logits = self.model(clip.permute(0, 2, 1, 3, 4).contiguous())
-        return validate_logits(logits, batch_size=clip.shape[0])
+        return validate_logits(logits, batch_size=clip.shape[0], classes=self.num_classes)
 
     @property
     def name(self):

@@ -217,3 +217,18 @@ results/
 .venv/
 venv/
 __pycache__/
+# Local K400 benchmark clips / archives
+k400_manifest1000/
+k400_manifest1000.tar
+five_model_checkpoints.tar.gz
+
+# Local tool/cache state
+.cache/
+.continue/
+
+# Temporary/local backup files
+LOCAL_AGENT_TEST.txt
+run_benchmark.py.bak_progress
+local_run_benchmark_before_sync.patch
+*.bak
+

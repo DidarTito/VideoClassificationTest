@@ -139,7 +139,7 @@ class OmnivoreModel(AdapterMetadata):
         clip = normalize(clip, (0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         clip = clip.permute(0, 2, 1, 3, 4).contiguous()
         logits = self.model(clip, input_type="video")
-        return validate_logits(logits, batch_size=clip.shape[0])
+        return validate_logits(logits, batch_size=clip.shape[0], classes=self.num_classes)
 
     @property
     def name(self):

@@ -1,0 +1,53 @@
+Genuine SSV2 measured accuracy: 2/17
+Published-only exact SSV2 accuracy: 3/17
+No exact SSV2 accuracy evidence: 8/17
+K400 measured rows: 15/17 (four explicitly mismatched historical recipes are unranked)
+
+k400 exact-compatible selection:
+- highest measured Top-1: **video-focalnet-t**, 95.9 (MeasuredTop1).
+- lowest latency: **video-focalnet-t**, 146.739 (LatencyMs).
+- lowest average power: **video-focalnet-t**, 29.373 (PowerW).
+- lowest energy/clip: **video-focalnet-t**, 4.31 (EnergyPerClipJ).
+- lowest VRAM: **dualformer-t**, 516.805 (PeakVRAMMiB).
+- highest NS-E: **video-focalnet-t**, 70.187 (NS-E).
+- highest NS-M: **video-focalnet-t**, 72.434 (NS-M).
+- highest NS#: **video-focalnet-t**, 63.348 (NS#).
+
+The lowest-latency model, video-focalnet-t, has 1.000x the throughput of the highest-accuracy model, video-focalnet-t; their measured Top-1 difference is 0.000 percentage points. video-focalnet-t uses 1.000x less energy per clip than video-focalnet-t.
+
+ssv2 exact-compatible selection:
+- highest measured Top-1: **uniformer-b**, 67.1 (MeasuredTop1).
+- lowest latency: **uniformer-s**, 78.66 (LatencyMs).
+- lowest average power: **uniformer-s**, 40.341 (PowerW).
+- lowest energy/clip: **uniformer-s**, 3.173 (EnergyPerClipJ).
+- lowest VRAM: **uniformer-s**, 214.231 (PeakVRAMMiB).
+- highest NS-E: **uniformer-s**, 63.789 (NS-E).
+- highest NS-M: **uniformer-b**, 66.792 (NS-M).
+- highest NS#: **uniformer-s**, 57.962 (NS#).
+
+The lowest-latency model, uniformer-s, has 2.066x the throughput of the highest-accuracy model, uniformer-b; their measured Top-1 difference is 2.000 percentage points. uniformer-s uses 2.756x less energy per clip than uniformer-b.
+
+Validation failures: 1
+
+Generated artifacts:
+results/final_checkpoint_head_audit.json
+results/final_cross_dataset_comparison.csv
+results/final_family_scaling.csv
+results/final_k400_ssv2_master.csv
+results/final_package_source_inventory.json
+results/final_published_measured_gaps.csv
+results/final_ssv2_published_evidence.csv
+results/final_validation_checks.csv
+results/ssv2_accuracy_verification_20260918/device_metrics.csv
+results/ssv2_accuracy_verification_20260918/uniformer-b.json
+results/ssv2_accuracy_verification_20260918/uniformer-s.json
+reports/FINAL_K400_TABLE.md
+reports/FINAL_SSV2_TABLE.md
+reports/K400_SSV2_COMPARISON.md
+reports/INTERMEDIATE_CONCLUSIONS_K400_SSV2.md
+reports/DRAFT_RESULTS_AND_DISCUSSION.md
+reports/RESULT_VALIDATION_REPORT.md
+reports/FINAL_SOURCE_AUDIT.md
+reports/FINAL_TERMINAL_SUMMARY.txt
+reports/SSV2_FULL17_DEVICE_TABLE.md
+results/ssv2_full17_device_metrics.csv

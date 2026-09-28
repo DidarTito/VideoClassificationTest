@@ -1,12 +1,13 @@
 # SSV2 dataset audit
 
+- Status: **TRAIN_AND_VAL_INCOMPLETE**
 - Classes: 174
-- Train annotations: 168913
-- Validation annotations: 24777
-- Train/validation overlap: 0
+- Expected/present train videos: 168913/86680
+- Expected/present validation videos: 24777/12767
 - Missing train/validation videos: 82233/12010
+- Train/validation overlap: 0
 - Corrupt train/validation videos checked: 0/0
-- Annotation/cache identity SHA256: `d87d70003cdb52673177dcf88a337841197a4425a7a8ecfe28c6fa197e914c5b`
+- Annotation/cache identity SHA256: `74487f2910005400367ee7c8ed43b37979029691965e0b506d0a19df115112f2`
 - Ready for training: **False**
 
 Class IDs come only from the official JSON mapping; directory names and cache directories are never treated as classes.
