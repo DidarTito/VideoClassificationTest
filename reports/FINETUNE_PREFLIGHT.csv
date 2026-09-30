@@ -1,3 +1,18 @@
 model,checkpoint_status,environment,import,checkpoint_load,head_174,forward,backward,optimizer_step,smoke_train,smoke_val,resume,microbatch,grad_accum,peak_vram,status,error
-uniformer-s,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,1,16,,PASS,
-videomae-b,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,1,16,,PASS,
+uniformer-s,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,1401.0,PASS,
+dualformer-t,READY_EXACT,mmaction-legacy,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,2417.6,PASS,
+video-focalnet-t,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,2417.6,PASS,
+videoswin-t,READY_EXACT,mmaction-legacy,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,2922.7,PASS,
+mvit-v1-b-16x4,READY_EXACT,slowfast,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,2922.7,PASS,
+video-focalnet-s,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,2922.7,PASS,
+mvit-v1-b-32x3,READY_EXACT,slowfast,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,3515.4,PASS,
+dualformer-s,READY_EXACT,mmaction-legacy,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,4524.0,PASS,
+videoswin-s,READY_EXACT,mmaction-legacy,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,4582.4,PASS,
+zeroi2v-b16-8f,READY_NEEDS_CONFIG_VALIDATION,mmaction2-modern,PASS,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,1,16,,FAIL,"RuntimeError: ZeroI2V ViT-B/16 (8f) is not runnable in this environment (checkpoint present): the model is an mmaction2 plugin from https://github.com/MCG-NJU/ZeroI2V, which is not vendored, and the mmaction2-modern runtime (envs/mmaction2-modern) is required. Run it on the Linux RTX 5070 host after setting up that environment; do not substitute a proxy architecture."
+video-focalnet-b,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,4582.4,PASS,
+uniformer-b,BLOCKED_EXACT_ARTIFACT,core-modern,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,1,16,,BLOCKED,checkpoint status BLOCKED_EXACT_ARTIFACT
+videomae-b,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,4582.4,PASS,
+dualformer-b-in21k,BLOCKED_EXACT_CHECKPOINT,mmaction-legacy,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,NOT_RUN,1,16,,BLOCKED,checkpoint status BLOCKED_EXACT_CHECKPOINT
+omnivore-b-in21k,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,8866.6,PASS,
+videoswin-b,READY_EXACT,mmaction-legacy,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,8866.6,PASS,
+timesformer-b,READY_EXACT,core-modern,PASS,PASS,PASS,PASS,PASS,PASS,NOT_RUN,NOT_RUN,NOT_RUN,1,16,8866.6,PASS,

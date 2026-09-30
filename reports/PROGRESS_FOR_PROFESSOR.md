@@ -1,6 +1,6 @@
 # Project progress -- frozen17 energy-efficiency study
 
-_Auto-generated 2026-09-05 by `scripts/generate_progress_report.py`; all numbers come from artifacts in `reports/` and `results/`._
+_Auto-generated 2026-09-08 by `scripts/generate_progress_report.py`; all numbers come from artifacts in `reports/` and `results/`._
 
 ## Frozen17 checkpoint status
 
@@ -20,7 +20,7 @@ _Auto-generated 2026-09-05 by `scripts/generate_progress_report.py`; all numbers
 ## RTX5070
 
 - tomorrow READY_EXACT benchmark set: 14/17 (uniformer-s, dualformer-t, video-focalnet-t, videoswin-t, mvit-v1-b-16x4, video-focalnet-s, mvit-v1-b-32x3, dualformer-s, videoswin-s, video-focalnet-b, videomae-b, omnivore-b-in21k, videoswin-b, timesformer-b)
-- previous/stale load preflight: 15/17 models OK (see `reports/RTX5070_PREFLIGHT.md` for its host and date)
+- current load preflight: 14/17 models OK (see `reports/RTX5070_PREFLIGHT.md` for its host and date)
 - K400 benchmark not yet run (step 10 of `run_project_steps.sh`)
 
 ## SSV2 fine-tuning (Experiment B)
@@ -31,7 +31,7 @@ _Auto-generated 2026-09-05 by `scripts/generate_progress_report.py`; all numbers
 
 ## Recent concrete work
 
-- 56 files added/modified in the working tree (uncommitted, see `git status`)
+- 7 files added/modified in the working tree (uncommitted, see `git status`)
 - frozen17 registry + `configs/frozen17.yaml` as single source of truth
 - exact MViTv1 16x4 and MViTv1 32x3 integrations
 - exact DualFormer-S integration

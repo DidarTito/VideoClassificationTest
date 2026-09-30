@@ -232,3 +232,12 @@ run_benchmark.py.bak_progress
 local_run_benchmark_before_sync.patch
 *.bak
 
+
+# Full-FT generated checkpoints / transfer bundles
+checkpoints/full_ft_ssv2/
+transfer/
+
+# Local caches / backups / duplicate repo
+.cache/
+scripts/finetune_ssv2_full.py.bak_*
+/VideoClassificationTest/

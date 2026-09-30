@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch, yaml
 from torch.utils.data import DataLoader, Subset
+from tqdm.auto import tqdm
 
 from training.adapters.runtime import build_trainable
 from training.amp import amp_policy, autocast
@@ -61,7 +62,51 @@ def main():
         state=torch.load(last,map_location="cpu",weights_only=True);model.load_state_dict(state["model"],strict=True);opt.load_state_dict(state["optimizer"]);scheduler.load_state_dict(state["scheduler"]);start=state["epoch"]+1;best=state["best_top1"]
     try:
         for epoch in range(start,int(cfg["epochs"])):
-            loss=train_one_epoch(model,train_loader,opt,a.device,ctx,scaler,max(1,int(cfg["effective_batch"])//int(cfg["microbatch"])),cfg["gradient_clip"]);metrics=validate(model,val_loader,a.device,ctx);row={"epoch":epoch,"train_loss":loss,**metrics,"lr":opt.param_groups[0]["lr"]};append_metrics(run/"metrics.csv",row)
+            gpu_name = (
+                torch.cuda.get_device_name(torch.cuda.current_device())
+                if str(a.device).startswith("cuda") and torch.cuda.is_available()
+                else str(a.device)
+            )
+            print("\n" + "=" * 78, flush=True)
+            print(f"MODEL      : {a.model}", flush=True)
+            print(f"EPOCH      : {epoch + 1}/{int(cfg['epochs'])}", flush=True)
+            print(f"HARDWARE   : {gpu_name}", flush=True)
+            print(f"TRAIN      : {len(train)} clips | {len(train_loader)} batches", flush=True)
+            print(f"VALIDATION : {len(val)} clips | {len(val_loader)} batches", flush=True)
+            print(f"MICROBATCH : {cfg['microbatch']}", flush=True)
+            print(f"EFFECTIVE  : {cfg['effective_batch']}", flush=True)
+            print(f"LR         : {opt.param_groups[0]['lr']:.8g}", flush=True)
+            print(f"RUN        : {run}", flush=True)
+            print("=" * 78, flush=True)
+            train_progress = tqdm(
+                train_loader,
+                desc=f"{a.model} | TRAIN | epoch {epoch + 1}/{int(cfg['epochs'])}",
+                unit="batch",
+                dynamic_ncols=True,
+                leave=True,
+            )
+            loss = train_one_epoch(
+                model, train_progress, opt, a.device, ctx, scaler,
+                max(1, int(cfg["effective_batch"]) // int(cfg["microbatch"])),
+                cfg["gradient_clip"]
+            )
+
+            val_progress = tqdm(
+                val_loader,
+                desc=f"{a.model} | VAL   | epoch {epoch + 1}/{int(cfg['epochs'])}",
+                unit="batch",
+                dynamic_ncols=True,
+                leave=True,
+            )
+            metrics = validate(model, val_progress, a.device, ctx)
+
+            row = {
+                "epoch": epoch,
+                "train_loss": loss,
+                **metrics,
+                "lr": opt.param_groups[0]["lr"],
+            }
+            append_metrics(run/"metrics.csv", row)
             scheduler.step();state={"model":model.state_dict(),"optimizer":opt.state_dict(),"scheduler":scheduler.state_dict(),"epoch":epoch,"best_top1":max(best,metrics["top1"]),"model_key":a.model};torch.save(state,last)
             if metrics["top1"]>best:
                 best=metrics["top1"];torch.save(state,run/"best.pth");(run/"best_metadata.json").write_text(json.dumps({"epoch":epoch,"top1":best,"selection_rule":"highest_val_top1_then_earlier_epoch"},indent=2))

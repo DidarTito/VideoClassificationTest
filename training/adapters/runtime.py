@@ -20,7 +20,24 @@ class TrainableModel(nn.Module):
         self.native_slowfast = native_slowfast
 
     def forward(self, clip):
-        # Dataset contract is B,T,C,H,W in [0,1].
+        # Canonical training contract: B,T,C,H,W in [0,1].
+        # Be defensive if a dataset/backend supplies B,C,T,H,W.
+        if clip.ndim != 5:
+            raise RuntimeError(
+                f"Expected 5D video tensor, got shape={tuple(clip.shape)}"
+            )
+
+        if clip.shape[2] == 3:
+            # already B,T,C,H,W
+            pass
+        elif clip.shape[1] == 3:
+            # B,C,T,H,W -> B,T,C,H,W
+            clip = clip.permute(0, 2, 1, 3, 4).contiguous()
+        else:
+            raise RuntimeError(
+                f"Cannot determine video tensor layout: {tuple(clip.shape)}"
+            )
+
         inp = self.spec["input"]
         frames = int(inp["num_frames"])
         if clip.shape[1] != frames:
