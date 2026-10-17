@@ -1,0 +1,10 @@
+{
+  "best_epoch": 8,
+  "best_val_top1": 57.82899440635909,
+  "fixed_1000_used_for_selection": false,
+  "last_epoch": 13,
+  "model": "mvit-v1-b-16x4",
+  "needs_extension": false,
+  "status": "completed",
+  "stop_reason": "early_stop:no >= 0.15pp gain for 5 epochs"
+}

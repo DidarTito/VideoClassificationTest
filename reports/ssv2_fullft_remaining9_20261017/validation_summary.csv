@@ -1,0 +1,10 @@
+model,completed_epochs,best_epoch_all_completed,best_val_top1_all_completed,val_top1_epoch10,val_top1_epoch20,val_top1_epoch30,selected_milestone_epoch,selected_milestone_val_top1
+video-focalnet-t,12,11,55.67144719687093,55.057408419901584,,,10,55.057408419901584
+mvit-v1-b-16x4,13,8,57.82899440635909,57.1855154140556,,,10,57.1855154140556
+video-focalnet-s,9,9,57.91310930731379,,,,,
+videoswin-t,0,,,,,,,
+dualformer-t,0,,,,,,,
+mvit-v1-b-32x3,0,,,,,,,
+videoswin-s,0,,,,,,,
+dualformer-b-in21k,0,,,,,,,
+omnivore-b-in21k,0,,,,,,,

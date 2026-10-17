@@ -1,0 +1,209 @@
+{
+  "git_commit": "9cdc8cae57116964000339df9450e2fe9c8025f8",
+  "models": {
+    "dualformer-b-in21k": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.328125,
+      "changed_examples": [
+        "raw.backbone.patch_embeds.0.proj.weight",
+        "raw.backbone.patch_embeds.0.proj.bias",
+        "raw.backbone.patch_embeds.0.norm.weight",
+        "raw.backbone.blocks.2.0.mlp.fc2.weight",
+        "raw.backbone.blocks.2.7.attn.sr.bias",
+        "raw.backbone.blocks.2.13.mlp.fc1.bias",
+        "raw.backbone.pos_block.2.proj.0.bias",
+        "raw.backbone.pos_block.3.proj.0.weight",
+        "raw.backbone.pos_block.3.proj.0.bias"
+      ],
+      "classifier": "cls_head.fc_cls",
+      "micro_batch": 4,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/dualformer/dualformer_base_patch244_window877.pth",
+      "source_sha256": "6d7414ca4ff1d010cddb8ebb8c05594921dafd1165da7811bb68a3c6bb679eca",
+      "status": "PASS",
+      "total_params": 87015982,
+      "tracked_backbone_changed": 9,
+      "trainable_params": 87015982
+    },
+    "dualformer-t": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.2890625,
+      "changed_examples": [
+        "raw.backbone.patch_embeds.0.proj.weight",
+        "raw.backbone.patch_embeds.0.proj.bias",
+        "raw.backbone.patch_embeds.0.norm.weight",
+        "raw.backbone.blocks.1.1.attn.lr.0.bias",
+        "raw.backbone.blocks.2.4.attn.proj.weight",
+        "raw.backbone.blocks.2.9.attn.proj.bias",
+        "raw.backbone.pos_block.2.proj.0.bias",
+        "raw.backbone.pos_block.3.proj.0.weight",
+        "raw.backbone.pos_block.3.proj.0.bias"
+      ],
+      "classifier": "cls_head.fc_cls",
+      "micro_batch": 8,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/dualformer/dualformer_tiny_patch244_window877.pth",
+      "source_sha256": "f27c1c1996e4d27bc5c71f2bf3f690d933d8ea378030fb9e9e93c816872deb46",
+      "status": "PASS",
+      "total_params": 21856622,
+      "tracked_backbone_changed": 9,
+      "trainable_params": 21856622
+    },
+    "mvit-v1-b-16x4": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.2578125,
+      "changed_examples": [
+        "raw.patch_embed.patch_model.weight",
+        "raw.patch_embed.patch_model.bias",
+        "raw.cls_positional_encoding.cls_token",
+        "raw.blocks.3.attn.norm_k.weight",
+        "raw.blocks.7.norm2.bias",
+        "raw.blocks.12.norm1.bias",
+        "raw.blocks.15.mlp.fc2.bias",
+        "raw.norm_embed.weight",
+        "raw.norm_embed.bias"
+      ],
+      "classifier": "head.proj",
+      "micro_batch": 16,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/mvit/MVIT_B_16x4.pyth",
+      "source_sha256": "f2771e3919cd9339f4301f25476e91be26b2ebfdf11b633df2701e4867283007",
+      "status": "PASS",
+      "total_params": 36436878,
+      "tracked_backbone_changed": 9,
+      "trainable_params": 36436878
+    },
+    "mvit-v1-b-32x3": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.12890625,
+      "changed_examples": [
+        "raw.patch_embed.patch_model.weight",
+        "raw.patch_embed.patch_model.bias",
+        "raw.cls_positional_encoding.cls_token",
+        "raw.blocks.3.attn.norm_k.weight",
+        "raw.blocks.7.norm2.bias",
+        "raw.blocks.12.norm1.bias",
+        "raw.blocks.15.mlp.fc2.bias",
+        "raw.norm_embed.weight",
+        "raw.norm_embed.bias"
+      ],
+      "classifier": "head.proj",
+      "micro_batch": 8,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/mvit/MVIT_B_32x3_f294077834.pyth",
+      "source_sha256": "ee62dd4c41f4cf0622a690c55bb3fea5c5685443cf0b4cb444327961047e5064",
+      "status": "PASS",
+      "total_params": 36437646,
+      "tracked_backbone_changed": 9,
+      "trainable_params": 36437646
+    },
+    "omnivore-b-in21k": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.234375,
+      "changed_examples": [
+        "raw.trunk.patch_embed.proj.weight",
+        "raw.trunk.patch_embed.proj.bias",
+        "raw.trunk.patch_embed.norm.weight",
+        "raw.trunk.layers.2.blocks.1.attn.qkv.bias",
+        "raw.trunk.layers.2.blocks.7.mlp.fc1.bias",
+        "raw.trunk.layers.2.blocks.14.attn.qkv.weight"
+      ],
+      "classifier": "heads.video.1",
+      "micro_batch": 2,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/omnivore/swinB_In21k_checkpoint.torch",
+      "source_sha256": "55707dba9353d1e2be1ae67bf989e468493f487e2f3ad44f951c249e1bd8d2e8",
+      "status": "PASS",
+      "total_params": 89882993,
+      "tracked_backbone_changed": 6,
+      "trainable_params": 89882993
+    },
+    "video-focalnet-s": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.455078125,
+      "changed_examples": [
+        "raw.patch_embed.proj.weight",
+        "raw.patch_embed.proj.bias",
+        "raw.patch_embed.norm.weight",
+        "raw.layers.2.blocks.1.modulation.focal_layers_temporal.0.0.weight",
+        "raw.layers.2.blocks.7.mlp.fc1.bias",
+        "raw.layers.2.blocks.14.norm1.bias",
+        "raw.layers.3.blocks.1.mlp.fc2.bias",
+        "raw.norm.weight",
+        "raw.norm.bias"
+      ],
+      "classifier": "head",
+      "micro_batch": 16,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/focalnet/video-focalnet_small_kinetics400.pth",
+      "source_sha256": "5031b6372b6a91b7a0be4762bc58c8d47318896a91a3f4fe0a9730d28cef4bd2",
+      "status": "PASS",
+      "total_params": 88561374,
+      "tracked_backbone_changed": 9,
+      "trainable_params": 88561374
+    },
+    "video-focalnet-t": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.1630859375,
+      "changed_examples": [
+        "raw.patch_embed.proj.weight",
+        "raw.patch_embed.proj.bias",
+        "raw.patch_embed.norm.weight",
+        "raw.layers.1.blocks.0.mlp.fc1.weight",
+        "raw.layers.2.blocks.1.mlp.fc1.bias",
+        "raw.layers.2.blocks.5.norm1.bias",
+        "raw.layers.3.blocks.1.mlp.fc2.bias",
+        "raw.norm.weight",
+        "raw.norm.bias"
+      ],
+      "classifier": "head",
+      "micro_batch": 16,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/focalnet/video-focalnet_tiny_kinetics400.pth",
+      "source_sha256": "86fb70adbd28e0fc8c9ca8c7ed36d52482a0c58507ad15820c8849bfb634b9ed",
+      "status": "PASS",
+      "total_params": 49379478,
+      "tracked_backbone_changed": 9,
+      "trainable_params": 49379478
+    },
+    "videoswin-s": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.375,
+      "changed_examples": [
+        "raw.backbone.patch_embed.proj.weight",
+        "raw.backbone.patch_embed.proj.bias",
+        "raw.backbone.patch_embed.norm.weight",
+        "raw.backbone.layers.2.blocks.1.attn.proj.bias",
+        "raw.backbone.layers.2.blocks.7.mlp.fc1.bias",
+        "raw.backbone.layers.2.blocks.14.norm1.bias",
+        "raw.backbone.layers.3.blocks.1.mlp.fc2.bias",
+        "raw.backbone.norm.weight",
+        "raw.backbone.norm.bias"
+      ],
+      "classifier": "cls_head.fc_cls",
+      "micro_batch": 4,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/videoswin/swin_small_patch244_window877_kinetics400_1k.pth",
+      "source_sha256": "7e05aa13cfa1aa99fe78c1ccac96c263344b315fe5d98a165b77b1f7532ce500",
+      "status": "PASS",
+      "total_params": 49642884,
+      "tracked_backbone_changed": 9,
+      "trainable_params": 49642884
+    },
+    "videoswin-t": {
+      "amp_dtype": "torch.bfloat16",
+      "audit_loss": 5.21484375,
+      "changed_examples": [
+        "raw.backbone.patch_embed.proj.weight",
+        "raw.backbone.patch_embed.proj.bias",
+        "raw.backbone.patch_embed.norm.weight",
+        "raw.backbone.layers.1.blocks.0.mlp.fc1.weight",
+        "raw.backbone.layers.2.blocks.1.mlp.fc1.bias",
+        "raw.backbone.layers.2.blocks.5.norm1.bias",
+        "raw.backbone.layers.3.blocks.1.mlp.fc2.bias",
+        "raw.backbone.norm.weight",
+        "raw.backbone.norm.bias"
+      ],
+      "classifier": "cls_head.fc_cls",
+      "micro_batch": 8,
+      "source": "/home/esai01/ESAI_Didar/VideoClassificationTest/checkpoints/videoswin/swin_tiny_patch244_window877_kinetics400_1k.pth",
+      "source_sha256": "9950e3be6b0b3763f80575dfbbe7db7cbeb18345e32363b73e8d44952ef76acc",
+      "status": "PASS",
+      "total_params": 27984276,
+      "tracked_backbone_changed": 9,
+      "trainable_params": 27984276
+    }
+  }
+}
